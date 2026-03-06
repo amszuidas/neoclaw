@@ -26,6 +26,7 @@
   - [Development Mode](#development-mode)
 - [Architecture](#-architecture)
 - [Cron Job CLI](#-cron-job-cli)
+- [MCP Servers & Skills](#-mcp-servers--skills)
 - [Memory System](#-memory-system)
 - [Tech Stack](#-tech-stack)
 - [Directory Structure](#-directory-structure)
@@ -127,6 +128,14 @@ bun onboard
     "domain": "feishu",            // "feishu" or "lark"
     "groupAutoReply": []           // List of Group IDs for Auto-Reply
   },
+  "mcpServers": {                  // MCP Servers (hot-reloaded on new process)
+    "example-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server"]
+    }
+  },
+  "skillsDir": "~/.neoclaw/skills",// Skills directory
   "logLevel": "info",
   "workspacesDir": "~/.neoclaw/workspaces"
 }
@@ -194,6 +203,48 @@ neoclaw-cron delete --job-id <jobId>
 # Update a task
 neoclaw-cron update --job-id <jobId> [--label "New Name"] [--enabled true|false]
 ```
+
+## 🔌 MCP Servers & Skills
+
+NeoClaw supports agent-agnostic configuration for MCP Servers and Skills. Configurations are defined at the NeoClaw level and automatically translated into the format required by the underlying agent (e.g., Claude Code).
+
+### MCP Servers
+
+Add MCP servers in `~/.neoclaw/config.json` under the `mcpServers` field:
+
+```jsonc
+{
+  "mcpServers": {
+    "my-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server"],
+      "env": { "API_KEY": "xxx" }
+    },
+    "remote-server": {
+      "type": "http",
+      "url": "https://mcp.example.com/sse",
+      "headers": { "Authorization": "Bearer xxx" }
+    }
+  }
+}
+```
+
+MCP configuration is **hot-reloaded** from the config file each time a new Claude Code process starts — no daemon restart required.
+
+### Skills
+
+Place skill directories under `~/.neoclaw/skills/` (configurable via `skillsDir` or `NEOCLAW_SKILLS_DIR` env var). Each skill directory must contain a `SKILL.md` file:
+
+```
+~/.neoclaw/skills/
+  deploy/
+    SKILL.md
+  code-review/
+    SKILL.md
+```
+
+Skills are automatically synced to each workspace on new process start: new skills are linked, removed skills are cleaned up, and modified `SKILL.md` content takes effect immediately (via symlinks).
 
 ## 🧠 Memory System
 

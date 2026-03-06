@@ -88,17 +88,28 @@ Key config fields (`~/.neoclaw/config.json`):
     "domain": "feishu",           // "feishu", "lark", or custom base URL
     "groupAutoReply": []          // chat IDs for auto-reply without @mention
   },
+  "mcpServers": {                 // MCP servers exposed to agents (hot-reloaded)
+    "server-name": {
+      "type": "stdio",            // "stdio" | "http" | "sse"
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server"],
+      "env": {}
+    }
+  },
+  "skillsDir": "~/.neoclaw/skills", // skill directories (each with SKILL.md)
   "logLevel": "info",             // "debug" | "info" | "warn" | "error"
-  "workspaceDir": "~/.neoclaw/workspaces"  // base dir; per-conversation subdirs created on demand
+  "workspacesDir": "~/.neoclaw/workspaces"  // base dir; per-conversation subdirs created on demand
 }
 ```
 
-Env var overrides: `NEOCLAW_AGENT_TYPE`, `NEOCLAW_MODEL`, `NEOCLAW_SYSTEM_PROMPT`, `NEOCLAW_ALLOWED_TOOLS`, `NEOCLAW_TIMEOUT_SECS`, `NEOCLAW_LOG_LEVEL`, `NEOCLAW_WORKSPACE`, `NEOCLAW_CONFIG` (config file path), `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_VERIFICATION_TOKEN`, `FEISHU_ENCRYPT_KEY`, `FEISHU_DOMAIN`, `FEISHU_GROUP_AUTO_REPLY`.
+Env var overrides: `NEOCLAW_AGENT_TYPE`, `NEOCLAW_MODEL`, `NEOCLAW_SYSTEM_PROMPT`, `NEOCLAW_ALLOWED_TOOLS`, `NEOCLAW_TIMEOUT_SECS`, `NEOCLAW_LOG_LEVEL`, `NEOCLAW_WORKSPACES_DIR`, `NEOCLAW_SKILLS_DIR`, `NEOCLAW_CONFIG` (config file path), `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_VERIFICATION_TOKEN`, `FEISHU_ENCRYPT_KEY`, `FEISHU_DOMAIN`, `FEISHU_GROUP_AUTO_REPLY`.
+
+**MCP & Skills workspace sync** (`ClaudeCodeAgent._prepareWorkspace()`): Runs each time a new Claude Code subprocess starts. `_syncMcpServers()` hot-reloads `mcpServers` from the config file (not cached opts) and writes `<workspace>/.mcp.json`. `_syncSkills()` reads `skillsDir`, symlinks valid skill directories (containing `SKILL.md`) into `<workspace>/.claude/skills/`, and removes stale symlinks for deleted skills.
 
 ## Conventions
 
 - Full async/await — no sync blocking in async paths
 - TypeScript strict mode with `noUncheckedIndexedAccess`
 - Interfaces over class inheritance for loose coupling
-- All runtime files (`logs/`, `cache/`, `workspaces/`) live under `~/.neoclaw/`; PID file at `~/.neoclaw/cache/neoclaw.pid`
+- All runtime files (`logs/`, `cache/`, `workspaces/`, `skills/`) live under `~/.neoclaw/`; PID file at `~/.neoclaw/cache/neoclaw.pid`
 - `Bun.spawn()` for subprocesses; `Bun.sleepSync()` only in daemon takeover loop

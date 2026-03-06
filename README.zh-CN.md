@@ -26,6 +26,7 @@
   - [开发模式](#开发模式)
 - [架构设计](#-架构设计)
 - [定时任务 CLI](#-定时任务-cli)
+- [MCP Servers 与 Skills](#-mcp-servers-与-skills)
 - [记忆系统](#-记忆系统)
 - [技术栈](#-技术栈)
 - [目录结构](#-目录结构)
@@ -127,6 +128,14 @@ bun onboard
     "domain": "feishu",            // "feishu" 或 "lark"
     "groupAutoReply": []           // 自动回复的群聊ID列表
   },
+  "mcpServers": {                  // MCP Servers（新进程启动时热加载）
+    "example-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server"]
+    }
+  },
+  "skillsDir": "~/.neoclaw/skills",// Skills 目录
   "logLevel": "info",
   "workspacesDir": "~/.neoclaw/workspaces"
 }
@@ -194,6 +203,48 @@ neoclaw-cron delete --job-id <jobId>
 # 更新任务
 neoclaw-cron update --job-id <jobId> [--label "新名称"] [--enabled true|false]
 ```
+
+## 🔌 MCP Servers 与 Skills
+
+NeoClaw 支持在统一层面配置 MCP Servers 和 Skills，配置会自动翻译为底层 Agent（如 Claude Code）所需的格式。
+
+### MCP Servers
+
+在 `~/.neoclaw/config.json` 的 `mcpServers` 字段中添加 MCP 服务器：
+
+```jsonc
+{
+  "mcpServers": {
+    "my-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@example/mcp-server"],
+      "env": { "API_KEY": "xxx" }
+    },
+    "remote-server": {
+      "type": "http",
+      "url": "https://mcp.example.com/sse",
+      "headers": { "Authorization": "Bearer xxx" }
+    }
+  }
+}
+```
+
+MCP 配置在每次新 Claude Code 进程启动时**热加载**自配置文件，无需重启 daemon。
+
+### Skills
+
+将 Skill 目录放置在 `~/.neoclaw/skills/` 下（可通过 `skillsDir` 或 `NEOCLAW_SKILLS_DIR` 环境变量自定义路径）。每个 Skill 目录必须包含 `SKILL.md` 文件：
+
+```
+~/.neoclaw/skills/
+  deploy/
+    SKILL.md
+  code-review/
+    SKILL.md
+```
+
+Skills 在新进程启动时自动同步到各工作区：新增的 Skill 会被链接，已删除的 Skill 会被清理，修改 `SKILL.md` 内容会立即生效（通过符号链接）。
 
 ## 🧠 记忆系统
 
