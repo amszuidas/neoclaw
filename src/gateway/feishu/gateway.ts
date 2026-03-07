@@ -210,7 +210,7 @@ export class FeishuGateway implements Gateway {
     };
 
     log.info(
-      `Message ${parsed.messageId} from ${parsed.senderName ?? parsed.senderOpenId}: ${parsed.text.slice(0, 80)}`
+      `Message ${parsed.messageId} from ${parsed.senderName ?? parsed.senderOpenId}: ${parsed.text}`
     );
 
     // reply() used for slash commands and non-streaming fallback

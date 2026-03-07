@@ -104,8 +104,6 @@ Stored in \`CLAUDE.md\` or \`AGENTS.md\` in the current workspace
   - Remembering information → update \`MEMORY.md\`
   - Adjusting your behavior/style → update \`SOUL.md\`
 
-Additionally, global memory is automatically updated at 4 AM daily.
-
 ### Security Restriction
 When other users chat with you, you are **prohibited** from reading or leaking global memory.
 

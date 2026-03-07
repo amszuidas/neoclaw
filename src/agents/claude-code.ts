@@ -7,7 +7,17 @@
  * Supports custom tool registration.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, lstatSync, readlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  lstatSync,
+  readlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { McpServerConfig } from '../config.js';
@@ -396,7 +406,10 @@ export class ClaudeCodeAgent implements Agent {
     }
     if (!response) throw new Error('Stream ended without done event');
     if (askQuestions) {
-      response = { ...response, text: `${formatQuestionsAsText(askQuestions)}\n\n${response.text}` };
+      response = {
+        ...response,
+        text: `${formatQuestionsAsText(askQuestions)}\n\n${response.text}`,
+      };
     }
     return response;
   }
@@ -548,10 +561,10 @@ export class ClaudeCodeAgent implements Agent {
     if (mcpServers && Object.keys(mcpServers).length > 0) {
       const mcpConfig = { mcpServers };
       writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2));
-      log.debug(`Wrote .mcp.json to ${cwd}`);
+      log.info(`Wrote .mcp.json to ${cwd}`);
     } else if (existsSync(mcpPath)) {
       unlinkSync(mcpPath);
-      log.debug(`Removed stale .mcp.json from ${cwd}`);
+      log.info(`Removed stale .mcp.json from ${cwd}`);
     }
   }
 
@@ -597,7 +610,7 @@ export class ClaudeCodeAgent implements Agent {
 
       try {
         symlinkSync(srcSkill, destLink);
-        log.debug(`Linked skill "${name}" → ${destLink}`);
+        log.info(`Linked skill "${name}" → ${destLink}`);
       } catch (err) {
         log.warn(`Failed to symlink skill "${name}": ${err}`);
       }
@@ -616,7 +629,7 @@ export class ClaudeCodeAgent implements Agent {
       try {
         if (!lstatSync(destLink).isSymbolicLink()) continue; // don't touch real dirs/files
         unlinkSync(destLink);
-        log.debug(`Removed stale skill symlink "${name}" from ${destSkillsDir}`);
+        log.info(`Removed stale skill symlink "${name}" from ${destSkillsDir}`);
       } catch {
         // ignore cleanup errors
       }

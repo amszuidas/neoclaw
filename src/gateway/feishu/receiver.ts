@@ -96,6 +96,16 @@ function extractText(content: string, msgType: string): string {
   }
 }
 
+function applyStyles(text: string, styles: string[]): string {
+  if (!text || !styles.length) return text;
+  let result = text;
+  if (styles.includes('bold')) result = `**${result}**`;
+  if (styles.includes('italic')) result = `*${result}*`;
+  if (styles.includes('underline')) result = `<u>${result}</u>`;
+  if (styles.includes('lineThrough')) result = `~~${result}~~`;
+  return result;
+}
+
 function extractRichText(content: string): string {
   try {
     const parsed = JSON.parse(content) as {
@@ -109,18 +119,27 @@ function extractRichText(content: string): string {
           user_id?: string;
           user_name?: string;
           image_key?: string;
+          style?: string[];
         }>
       >;
     };
     const title = parsed.title ?? '';
     const blocks = parsed.content ?? [];
-    let text = title ? `${title}\n\n` : '';
+    let text = title ? `# ${title}\n\n` : '';
     for (const para of blocks) {
       for (const el of para) {
-        if (el.tag === 'text') text += el.text ?? '';
-        else if (el.tag === 'code_block') text += `\`\`\`${el.language}\n${el.text ?? ''}\`\`\``;
-        else if (el.tag === 'a') text += el.text ?? el.href ?? '';
-        else if (el.tag === 'at') text += `@${el.user_name ?? el.user_id ?? ''}`;
+        const styles = el.style ?? [];
+        if (el.tag === 'text') text += applyStyles(el.text ?? '', styles);
+        else if (el.tag === 'code_block')
+          text += `\`\`\`${el.language ?? ''}\n${el.text ?? ''}\`\`\``;
+        else if (el.tag === 'a') text += `[${el.text ?? el.href ?? ''}](${el.href ?? ''})`;
+        else if (el.tag === 'at') {
+          if (el.user_name) {
+            text += `@${el.user_name}`;
+          } else if (el.user_id) {
+            text += el.user_id; // el.user_id: @_user_x
+          }
+        }
         // Images in rich text are noted but not inlined as text
       }
       text += '\n';
@@ -175,15 +194,6 @@ function mediaPlaceholder(msgType: string): string {
 function isBotMentioned(event: RawMessageEvent, botOpenId?: string): boolean {
   if (!botOpenId) return false;
   return (event.message.mentions ?? []).some((m) => m.id.open_id === botOpenId);
-}
-
-function removeBotMention(text: string, event: RawMessageEvent): string {
-  let out = text;
-  for (const m of event.message.mentions ?? []) {
-    out = out.replace(new RegExp(`@${m.name}\\s*`, 'g'), '').trim();
-    out = out.replace(new RegExp(m.key, 'g'), '').trim();
-  }
-  return out;
 }
 
 // ── Media download ────────────────────────────────────────────
@@ -329,7 +339,7 @@ export async function parseMessage(
   const mentionedBot = isBotMentioned(event, opts.botOpenId);
   const isAutoReplyGroup = opts.groupAutoReply?.includes(chatId) ?? false;
 
-  log.debug(
+  log.info(
     `Message ${msgId}: chatId=${chatId}, chatType=${chatType}, mentioned=${mentionedBot}, autoReply=${isAutoReplyGroup}`
   );
 
@@ -338,13 +348,11 @@ export async function parseMessage(
 
   const client = getHttpClient(creds);
   const rawText = extractText(event.message.content, event.message.message_type);
-  const cleanText = removeBotMention(rawText, event);
-  log.info(`Message ${msgId}: cleanText=${cleanText}`);
 
-  if (new Set(['/clear', '/new', 'status', '/restart', '/help']).has(cleanText.trim()))
+  if (new Set(['/clear', '/new', 'status', '/restart', '/help']).has(rawText.trim()))
     return {
       messageId: msgId,
-      text: cleanText.trim(),
+      text: rawText.trim(),
       chatId,
       chatType,
       threadRootId,
@@ -392,10 +400,9 @@ export async function parseMessage(
   }
 
   // Build the final text for the agent
-  let text = cleanText;
+  let text = rawText;
   if (quotedText && !isAutoReplyGroup) text = `[Replying to: "${quotedText}"]\n\n${text}`;
   if (chatType === 'group' && !isAutoReplyGroup) text = `${senderOpenId}: ${text}`;
-  for (const a of attachments) text += `\n${a.placeholder}`;
   log.info(`Message ${msgId}: text=${text}`);
 
   return {
