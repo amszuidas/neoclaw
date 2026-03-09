@@ -67,11 +67,14 @@ export class NeoClawDaemon {
     // Self-daemonize: if this is the first launch (not the background child),
     // fork to background with I/O redirected to the log file, then exit.
     if (!process.env['NEOCLAW_DAEMON']) {
+      const env: Record<string, string | undefined> = { ...process.env, NEOCLAW_DAEMON: '1' };
+      delete env['CLAUDECODE'];
+      delete env['CLAUDE_CODE_ENTRYPOINT'];
       const child = spawn(process.execPath, process.argv.slice(1), {
         detached: true,
         stdio: 'ignore',
         cwd: process.cwd(),
-        env: { ...process.env, NEOCLAW_DAEMON: '1' },
+        env,
       });
       child.unref();
       console.log('NeoClaw daemon started in background. Logs:', join(NEOCLAW_HOME, 'logs'));
@@ -307,6 +310,7 @@ export class NeoClawDaemon {
     // Strip Claude Code env vars that would interfere with the child's agent
     const env = { ...process.env };
     delete env['CLAUDECODE'];
+    delete env['CLAUDE_CODE_ENTRYPOINT'];
 
     const child = spawn(process.execPath, process.argv.slice(1), {
       detached: true,

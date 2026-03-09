@@ -54,10 +54,14 @@ Transcript:
 export async function summarizeTranscript(transcript: string): Promise<string> {
   const model = getSummaryModel();
   const prompt = SUMMARIZE_PROMPT + transcript;
+  const env = { ...process.env };
+  delete env['CLAUDECODE'];
+  delete env['CLAUDE_CODE_ENTRYPOINT'];
 
   const result = Bun.spawnSync(['claude', '--model', model, '-p', prompt], {
     stdout: 'pipe',
     stderr: 'pipe',
+    env,
     timeout: 60_000,
   });
 
