@@ -24,12 +24,16 @@ import { parseMessage } from './receiver.js';
 import {
   addReaction,
   appendCardElements,
+  appendStepToPanel,
   buildCard,
   buildQuestionFormElements,
+  buildStepDiv,
   buildStreamingCard,
   closeCardStreaming,
   createCardEntity,
-  insertThinkingPanel,
+  deleteCardElement,
+  formatToolStep,
+  insertStepsPanel,
   patchCardElement,
   removeReaction,
   sendCard,
@@ -38,6 +42,8 @@ import {
   sendMarkdown,
   STREAM_EL,
   updateCardText,
+  updatePanelHeader,
+  updateStepText,
 } from './sender.js';
 
 const log = logger('feishu');
@@ -338,10 +344,12 @@ export class FeishuGateway implements Gateway {
    * Streaming reply: lazily creates a Feishu streaming card (JSON 2.0) on the
    * first content event, then progressively updates it as agent events arrive.
    *
-   * The card is NOT sent until the first thinking_delta or text_delta arrives,
-   * so users never see a blank card while the agent is still thinking.
-   * The thinking panel is added dynamically only if thinking content arrives.
-   * Stats use a markdown element (note tag is unsupported in schema V2).
+   * Visual style inspired by agentara:
+   * - Steps panel: collapsible with border, grey header, per-tool icons
+   * - Thinking: each segment is a DivElement (robot icon), interleaved with tool steps
+   * - Tool calls: individual DivElements with specific icons and descriptions
+   * - Loading indicator: grey dots icon at the bottom during streaming
+   * - AskUserQuestion: interactive form appended to the card (NeoClaw-specific)
    */
   private async _streamingReply(
     chatId: string,
@@ -351,9 +359,14 @@ export class FeishuGateway implements Gateway {
     const client = this._httpClient();
 
     let cardId: string | null = null;
-    let thinkingText = '';
     let mainText = '';
-    let thinkingPanelAdded = false;
+    let stepsPanelAdded = false;
+    let stepCount = 0;
+    // Current thinking segment — each contiguous run of thinking_deltas becomes one step
+    let currentThinkingId: string | null = null;
+    let currentThinkingText = '';
+    let thinkingSegmentCount = 0;
+    let lastStepId = ''; // Tracks last element in panel for insert_after
     let seq = 1;
     let lastThinkingFlush = 0;
     let lastMainFlush = 0;
@@ -369,28 +382,86 @@ export class FeishuGateway implements Gateway {
       return cardId;
     };
 
+    // Add a step element to the panel (creates panel with it on first call).
+    const addStep = async (
+      id: string,
+      stepDiv: Record<string, unknown>,
+      stepId: string
+    ): Promise<void> => {
+      if (!stepsPanelAdded) {
+        await insertStepsPanel(client, id, stepDiv, seq++);
+        stepsPanelAdded = true;
+      } else {
+        await appendStepToPanel(client, id, stepDiv, lastStepId, seq++);
+      }
+      lastStepId = stepId;
+    };
+
+    // Update panel header with current step count.
+    const refreshPanelHeader = async (id: string, label: string): Promise<void> => {
+      const countText = stepCount + ' ' + (stepCount === 1 ? 'step' : 'steps');
+      await updatePanelHeader(client, id, `${label} (${countText})`, seq++).catch((e) =>
+        log.warn(`updatePanelHeader failed: ${e}`)
+      );
+    };
+
+    // Finalize the current thinking segment (flush text, reset state).
+    const finalizeThinking = async (id: string): Promise<void> => {
+      if (!currentThinkingId) return;
+      await updateStepText(client, id, currentThinkingId, currentThinkingText, seq++).catch((e) =>
+        log.warn(`final thinking segment flush failed: ${e}`)
+      );
+      currentThinkingId = null;
+      currentThinkingText = '';
+    };
+
     try {
       for await (const event of stream) {
         const now = Date.now();
 
         if (event.type === 'thinking_delta') {
-          thinkingText += event.text;
+          currentThinkingText += event.text;
           const id = await ensureCard();
-          if (!thinkingPanelAdded) {
-            await insertThinkingPanel(client, id, seq++).catch((e) =>
-              log.warn(`insertThinkingPanel failed: ${e}`)
+
+          // Start a new thinking segment if needed (robot icon DivElement)
+          if (!currentThinkingId) {
+            thinkingSegmentCount++;
+            stepCount++;
+            currentThinkingId = `thinking_${thinkingSegmentCount}`;
+            const thinkingDiv = buildStepDiv('', 'robot_outlined', currentThinkingId);
+            await addStep(id, thinkingDiv, currentThinkingId).catch((e) =>
+              log.warn(`addStep (thinking) failed: ${e}`)
             );
-            thinkingPanelAdded = true;
+            await refreshPanelHeader(id, 'Working on it');
           }
+
+          // Throttled text update for the current thinking DivElement
           if (now - lastThinkingFlush >= FLUSH_INTERVAL_MS) {
-            await updateCardText(client, id, STREAM_EL.thinkingMd, thinkingText, seq++).catch((e) =>
-              log.warn(`thinking update failed: ${e}`)
+            await updateStepText(client, id, currentThinkingId, currentThinkingText, seq++).catch(
+              (e) => log.warn(`thinking update failed: ${e}`)
             );
             lastThinkingFlush = now;
           }
-        } else if (event.type === 'text_delta') {
-          mainText += event.text;
+        } else if (event.type === 'tool_use') {
           const id = await ensureCard();
+
+          // Finalize the preceding thinking segment so tool step appears after it
+          await finalizeThinking(id);
+
+          stepCount++;
+          const { text, icon } = formatToolStep(event.name, event.input);
+          const stepElementId = `step_${stepCount}`;
+          const stepDiv = buildStepDiv(text, icon, stepElementId);
+
+          await addStep(id, stepDiv, stepElementId).catch((e) =>
+            log.warn(`addStep (tool) failed: ${e}`)
+          );
+          await refreshPanelHeader(id, 'Working on it');
+        } else if (event.type === 'text_delta') {
+          const id = await ensureCard();
+          await finalizeThinking(id);
+
+          mainText += event.text;
           if (now - lastMainFlush >= FLUSH_INTERVAL_MS) {
             await updateCardText(client, id, STREAM_EL.mainMd, mainText, seq++).catch((e) =>
               log.warn(`main update failed: ${e}`)
@@ -398,9 +469,6 @@ export class FeishuGateway implements Gateway {
             lastMainFlush = now;
           }
         } else if (event.type === 'ask_questions') {
-          // Append the interactive question form to the still-open streaming card.
-          // Interactions are disabled during streaming mode and become active once
-          // closeCardStreaming() is called in the finally block (after 'done').
           const id = await ensureCard();
           const { threadRootId } = parseConvId(event.conversationId);
           const formEls = buildQuestionFormElements({
@@ -415,12 +483,10 @@ export class FeishuGateway implements Gateway {
         } else if (event.type === 'done') {
           const response = event.response;
           outboundImages = response.outboundImages;
-          // For image-only responses, skip creating an empty streaming card.
-          const shouldRenderCard = Boolean(cardId || mainText || response.text || thinkingText);
-          if (!shouldRenderCard) continue;
-
-          // Ensure card exists even if no deltas arrived (e.g. very short text responses)
           const id = await ensureCard();
+
+          // Finalize any in-progress thinking segment
+          await finalizeThinking(id);
 
           // Final flush with canonical response text
           mainText = response.text || mainText;
@@ -428,21 +494,20 @@ export class FeishuGateway implements Gateway {
             log.warn(`final main update failed: ${e}`)
           );
 
-          if (thinkingPanelAdded && thinkingText) {
-            // Final thinking flush, then collapse the panel
-            await updateCardText(client, id, STREAM_EL.thinkingMd, thinkingText, seq++).catch((e) =>
-              log.warn(`final thinking update failed: ${e}`)
+          // Update panel header to final "Show N steps" label
+          if (stepsPanelAdded && stepCount > 0) {
+            const countText = stepCount + ' ' + (stepCount === 1 ? 'step' : 'steps');
+            await updatePanelHeader(client, id, `Show ${countText}`, seq++).catch((e) =>
+              log.warn(`final header update failed: ${e}`)
             );
-            await patchCardElement(
-              client,
-              id,
-              STREAM_EL.thinkingPanel,
-              { tag: 'collapsible_panel', expanded: false },
-              seq++
-            ).catch((e) => log.warn(`collapse thinking panel failed: ${e}`));
           }
 
-          // Append stats footer using markdown (note tag unsupported in schema V2)
+          // Remove loading indicator
+          await deleteCardElement(client, id, STREAM_EL.loadingDiv, seq++).catch((e) =>
+            log.warn(`delete loading div failed: ${e}`)
+          );
+
+          // Append stats footer
           const stats = formatStats(response);
           if (stats) {
             await appendCardElements(
@@ -458,11 +523,19 @@ export class FeishuGateway implements Gateway {
         }
       }
     } finally {
-      // Close streaming mode only if a card was actually sent
       if (cardId) {
         await closeCardStreaming(client, cardId, seq++).catch((e) =>
           log.warn(`closeCardStreaming failed: ${e}`)
         );
+        if (stepsPanelAdded && stepCount > 0) {
+          await patchCardElement(
+            client,
+            cardId,
+            STREAM_EL.stepsPanel,
+            { expanded: false },
+            seq++
+          ).catch((e) => log.warn(`collapse steps panel failed: ${e}`));
+        }
       }
       await this._sendOutboundImages(client, chatId, outboundImages, replyToMessageId);
     }

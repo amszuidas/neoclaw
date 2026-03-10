@@ -73,6 +73,7 @@ export type AskQuestion = {
 /** Events emitted by Agent.stream() during incremental response generation. */
 export type AgentStreamEvent =
   | { type: 'thinking_delta'; text: string }
+  | { type: 'tool_use'; name: string; input: unknown }
   | { type: 'text_delta'; text: string }
   /** Emitted when Claude Code uses AskUserQuestion and the gateway should render an interactive form. */
   | { type: 'ask_questions'; questions: AskQuestion[]; conversationId: string }

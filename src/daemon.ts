@@ -187,7 +187,7 @@ export class NeoClawDaemon {
       log.warn(`Failed to send SIGTERM to old daemon (pid=${oldPid})`);
     }
 
-    const deadline = Date.now() + 10_000;
+    const deadline = Date.now() + 5_000;
     while (Date.now() < deadline) {
       try {
         process.kill(oldPid, 0);

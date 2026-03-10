@@ -249,7 +249,7 @@ Skills are automatically synced to each workspace on new process start: new skil
 
 ## 🧠 Memory System
 
-NeoClaw has a three-layer memory system with SQLite FTS5 full-text indexing, managed entirely through custom tools (`memory_search`, `memory_save`, `memory_list`):
+NeoClaw has a three-layer memory system with SQLite FTS5 full-text indexing, exposed as a built-in MCP server (`neoclaw-memory`) that provides four tools: `memory_search`, `memory_read`, `memory_save`, `memory_list`:
 
 ```
 ~/.neoclaw/memory/
@@ -264,13 +264,13 @@ All memory files use the same frontmatter format (`title`, `date`, `tags`).
 
 | Category | Description | Read | Write |
 |----------|-------------|------|-------|
-| **identity** | Personality, values, communication style | `memory_search` / `memory_list` | `memory_save` with `category="identity"` |
-| **knowledge** | Topic-organized persistent knowledge | `memory_search` / `memory_list` | `memory_save` with `topic` + `content` |
-| **episode** | Auto-generated session summaries | `memory_search` / `memory_list` | Automatic on `/clear` or `/new` |
+| **identity** | Personality, values, communication style | `memory_read` / `memory_search` / `memory_list` | `memory_save` with `category="identity"` |
+| **knowledge** | Topic-organized persistent knowledge | `memory_read` / `memory_search` / `memory_list` | `memory_save` with `topic` + `content` |
+| **episode** | Auto-generated session summaries | `memory_read` / `memory_search` / `memory_list` | Automatic on `/clear` or `/new` |
 
-### Tool Interception Mechanism
+### MCP Server Integration
 
-Memory tools are registered as custom tools on `ClaudeCodeAgent`. When the agent calls them, Claude Code denies the call (not in `--allowedTools`), and NeoClaw intercepts the denial from `permission_denials`, executes the handler, and sends the result back as a user message.
+The memory system runs as a standalone stdio MCP server (`neoclaw-memory`), automatically injected into each workspace's `.mcp.json` alongside user-configured MCP servers. Claude Code communicates with it directly through the MCP protocol — no tool interception needed.
 
 ### Index Updates
 

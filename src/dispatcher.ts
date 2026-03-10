@@ -224,7 +224,7 @@ export class Dispatcher {
           // Delay slightly so reply() is called before the restart fires
           setTimeout(
             () => this._onRestart!({ chatId: msg.chatId, gatewayKind: msg.gatewayKind }),
-            500
+            5_000
           );
         }
         return { text: 'Restarting NeoClaw, please wait...' };

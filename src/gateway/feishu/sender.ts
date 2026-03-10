@@ -6,13 +6,14 @@
  * 1. Non-streaming (JSON 2.0, direct send):
  *      schema: "2.0"
  *      config: { wide_screen_mode: true }
- *      body.elements: [ collapsible_panel?, hr?, markdown, hr?, markdown(stats)? ]
+ *      body.elements: [ collapsible_panel?, markdown, hr?, markdown(stats)? ]
  *    Sent directly as msg_type "interactive" with content = card JSON string.
  *
  * 2. Streaming (JSON 2.0, requires cardkit API):
  *      schema: "2.0"
  *      config: { streaming_mode: true, ... }
- *      body.elements: [ collapsible_panel (thinking), hr, markdown (main) ]
+ *      body.elements: [ markdown (main), div (loading) ]
+ *    Steps panel inserted dynamically on first thinking/tool event.
  *    Created via cardkit.v1.card.create → card_id reference sent in message.
  *    Content updated progressively via cardkit.v1.cardElement.content.
  *    Streaming closed via cardkit.v1.card.settings({ streaming_mode: false }).
@@ -30,17 +31,109 @@ const log = logger('sender');
 
 type MarkdownEl = { tag: 'markdown'; content: string };
 type HrEl = { tag: 'hr' };
+type PlainTextEl = {
+  tag: 'plain_text';
+  content: string;
+  text_size?: string;
+  text_color?: string;
+};
+type StandardIconEl = {
+  tag: 'standard_icon';
+  token: string;
+  color?: string;
+};
+type DivEl = {
+  tag: 'div';
+  icon?: StandardIconEl;
+  text?: PlainTextEl;
+};
 type CollapsiblePanel = {
   tag: 'collapsible_panel';
   expanded: boolean;
-  header: { title: { tag: 'plain_text'; content: string } };
+  border?: { color?: string; corner_radius?: string };
+  vertical_spacing?: string;
+  header: {
+    title: PlainTextEl;
+    icon?: StandardIconEl;
+    icon_position?: string;
+    icon_expanded_angle?: number;
+  };
   elements: CardElement[];
 };
-type CardElement = MarkdownEl | HrEl | CollapsiblePanel;
+type CardElement = MarkdownEl | HrEl | CollapsiblePanel | DivEl;
+
+// ── Tool step formatting ─────────────────────────────────────
+
+type ToolStepInfo = { text: string; icon: string };
+
+/** Map a tool_use event to a human-readable description and Feishu standard icon. */
+export function formatToolStep(name: string, input: unknown): ToolStepInfo {
+  const inp = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  switch (name) {
+    case 'Agent':
+    case 'Task':
+      return { text: 'Run sub-agent', icon: 'robot_outlined' };
+    case 'Bash':
+      return {
+        text: (inp['description'] as string) ?? (inp['command'] as string) ?? 'Run command',
+        icon: 'computer_outlined',
+      };
+    case 'Edit':
+      return { text: `Edit "${inp['file_path'] ?? ''}"`, icon: 'edit_outlined' };
+    case 'Glob':
+      return {
+        text: `Search files by pattern "${inp['pattern'] ?? ''}"`,
+        icon: 'card-search_outlined',
+      };
+    case 'Grep':
+      return {
+        text: `Search text by pattern "${inp['pattern'] ?? ''}"${inp['glob'] ? ` in "${inp['glob']}"` : ''}`,
+        icon: 'doc-search_outlined',
+      };
+    case 'Read':
+      return { text: `Read file "${inp['file_path'] ?? ''}"`, icon: 'file-link-bitable_outlined' };
+    case 'Write':
+      return { text: `Write file "${inp['file_path'] ?? ''}"`, icon: 'edit_outlined' };
+    case 'Skill':
+      return { text: `Load skill "${inp['skill'] ?? ''}"`, icon: 'file-link-mindnote_outlined' };
+    case 'WebFetch':
+      return { text: `Fetch web page from "${inp['url'] ?? ''}"`, icon: 'language_outlined' };
+    case 'WebSearch':
+      return { text: `Search web for "${inp['query'] ?? ''}"`, icon: 'search_outlined' };
+    case 'NotebookEdit':
+      return { text: `Edit notebook "${inp['notebook'] ?? ''}"`, icon: 'edit_outlined' };
+    case 'LSP':
+      return {
+        text: `LSP ${(inp['command'] as string) ?? 'action'}`,
+        icon: 'setting-inter_outlined',
+      };
+    case 'TodoRead':
+    case 'TodoWrite':
+      return { text: name === 'TodoRead' ? 'Read todos' : 'Update todos', icon: 'list_outlined' };
+    case 'ToolSearch':
+      return { text: `Search tools for "${inp['query'] ?? ''}"`, icon: 'search_outlined' };
+    default:
+      return { text: name, icon: 'setting-inter_outlined' };
+  }
+}
+
+/** Build a DivElement (icon + text) for a step inside the collapsible panel. */
+export function buildStepDiv(
+  text: string,
+  iconToken: string,
+  elementId?: string
+): Record<string, unknown> {
+  return {
+    tag: 'div',
+    ...(elementId ? { element_id: elementId } : {}),
+    icon: { tag: 'standard_icon', token: iconToken, color: 'grey' },
+    text: { tag: 'plain_text', text_color: 'grey', text_size: 'notation', content: text },
+  };
+}
 
 // ── Card builder ──────────────────────────────────────────────
 
-/** Build a Feishu Card JSON 2.0 object for an agent response. */
+/** Build a Feishu Card JSON 2.0 object for an agent response (non-streaming). */
 export function buildCard(opts: {
   text: string;
   thinking?: string | null;
@@ -52,10 +145,21 @@ export function buildCard(opts: {
     elements.push({
       tag: 'collapsible_panel',
       expanded: false,
-      header: { title: { tag: 'plain_text', content: '💭 Thinking' } },
+      border: { color: 'grey-300', corner_radius: '6px' },
+      vertical_spacing: '2px',
+      header: {
+        title: {
+          tag: 'plain_text',
+          content: 'Show steps',
+          text_color: 'grey',
+          text_size: 'notation',
+        },
+        icon: { tag: 'standard_icon', token: 'right_outlined', color: 'grey' },
+        icon_position: 'right',
+        icon_expanded_angle: 90,
+      },
       elements: [{ tag: 'markdown', content: opts.thinking }],
     });
-    elements.push({ tag: 'hr' });
   }
 
   elements.push({ tag: 'markdown', content: opts.text });
@@ -245,18 +349,17 @@ function detectImageMime(buf: Buffer): string {
 
 /** Element IDs used in streaming cards — must be globally unique within the card. */
 export const STREAM_EL = {
-  thinkingPanel: 'thinking_panel',
-  thinkingMd: 'thinking_md',
-  thinkingHr: 'thinking_hr',
+  stepsPanel: 'steps_panel',
   mainMd: 'main_md',
+  loadingDiv: 'loading_div',
   statsHr: 'stats_hr',
   statsNote: 'stats_note',
 } as const;
 
 /**
  * Build the initial Feishu Card JSON 2.0 object for a streaming response.
- * The thinking panel is NOT included here — it is inserted dynamically via
- * insertThinkingPanel() only when thinking content actually arrives.
+ * Starts with just the main markdown and a loading indicator.
+ * The steps panel is inserted dynamically when thinking/tool events arrive.
  */
 export function buildStreamingCard(): Record<string, unknown> {
   return {
@@ -268,20 +371,28 @@ export function buildStreamingCard(): Record<string, unknown> {
         print_step: { default: 5 },
         print_strategy: 'delay',
       },
+      enable_forward: true,
+      width_mode: 'fill',
     },
     body: {
-      elements: [{ tag: 'markdown', element_id: STREAM_EL.mainMd, content: '' }],
+      elements: [
+        { tag: 'markdown', element_id: STREAM_EL.mainMd, content: '' },
+        buildStepDiv('', 'more_outlined', STREAM_EL.loadingDiv),
+      ],
     },
   };
 }
 
 /**
- * Insert the thinking collapsible panel + divider BEFORE the main content element.
- * Call this once when the first thinking_delta arrives.
+ * Insert the steps collapsible panel BEFORE the main content element.
+ * Call this once when the first thinking_delta or tool_use arrives.
+ * The first step element is included inside the panel (no placeholder needed).
+ * Styled with border, grey header, right arrow icon (agentara-style).
  */
-export async function insertThinkingPanel(
+export async function insertStepsPanel(
   client: Lark.Client,
   cardId: string,
+  firstElement: Record<string, unknown>,
   sequence: number
 ): Promise<void> {
   const res = await client.cardkit.v1.cardElement.create({
@@ -292,19 +403,102 @@ export async function insertThinkingPanel(
       elements: JSON.stringify([
         {
           tag: 'collapsible_panel',
-          element_id: STREAM_EL.thinkingPanel,
+          element_id: STREAM_EL.stepsPanel,
           expanded: true,
-          header: { title: { tag: 'plain_text', content: '💭 Thinking' } },
-          elements: [{ tag: 'markdown', element_id: STREAM_EL.thinkingMd, content: '' }],
+          border: { color: 'grey-300', corner_radius: '6px' },
+          vertical_spacing: '2px',
+          header: {
+            title: {
+              tag: 'plain_text',
+              text_color: 'grey',
+              text_size: 'notation',
+              content: 'Working on it',
+            },
+            icon: { tag: 'standard_icon', token: 'right_outlined', color: 'grey' },
+            icon_position: 'right',
+            icon_expanded_angle: 90,
+          },
+          elements: [firstElement],
         },
-        { tag: 'hr', element_id: STREAM_EL.thinkingHr },
       ]),
       sequence,
     },
   });
   if (res.code !== 0) {
-    throw new Error(`insertThinkingPanel failed (code ${res.code}): ${res.msg ?? ''}`);
+    throw new Error(`insertStepsPanel failed (code ${res.code}): ${res.msg ?? ''}`);
   }
+}
+
+/**
+ * Append a step DivElement inside the steps panel after a target element.
+ * Used to add steps (thinking or tool) after the previous step in the panel.
+ */
+export async function appendStepToPanel(
+  client: Lark.Client,
+  cardId: string,
+  step: Record<string, unknown>,
+  afterElementId: string,
+  sequence: number
+): Promise<void> {
+  const res = await client.cardkit.v1.cardElement.create({
+    path: { card_id: cardId },
+    data: {
+      type: 'insert_after',
+      target_element_id: afterElementId,
+      elements: JSON.stringify([step]),
+      sequence,
+    },
+  });
+  if (res.code !== 0) {
+    throw new Error(`appendStepToPanel failed (code ${res.code}): ${res.msg ?? ''}`);
+  }
+}
+
+/** Update a step DivElement's text content (used for streaming thinking text). */
+export async function updateStepText(
+  client: Lark.Client,
+  cardId: string,
+  elementId: string,
+  text: string,
+  sequence: number
+): Promise<void> {
+  await patchCardElement(
+    client,
+    cardId,
+    elementId,
+    {
+      text: { tag: 'plain_text', text_color: 'grey', text_size: 'notation', content: text },
+    },
+    sequence
+  );
+}
+
+/** Update the steps panel header title text (e.g. step count). */
+export async function updatePanelHeader(
+  client: Lark.Client,
+  cardId: string,
+  headerText: string,
+  sequence: number
+): Promise<void> {
+  await patchCardElement(
+    client,
+    cardId,
+    STREAM_EL.stepsPanel,
+    {
+      header: {
+        title: {
+          tag: 'plain_text',
+          text_color: 'grey',
+          text_size: 'notation',
+          content: headerText,
+        },
+        icon: { tag: 'standard_icon', token: 'right_outlined', color: 'grey' },
+        icon_position: 'right',
+        icon_expanded_angle: 90,
+      },
+    },
+    sequence
+  );
 }
 
 /** Create a card entity and return its card_id. */
