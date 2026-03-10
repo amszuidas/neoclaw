@@ -23,8 +23,8 @@ const log = logger('feishu:receiver');
 
 // ── Deduplication ─────────────────────────────────────────────
 
-const DEDUP_TTL_MS = 600000;
-const DEDUP_MAX_ENTRIES = 1_000;
+const DEDUP_TTL_MS = 24 * 60 * 60 * 1000;
+const DEDUP_MAX_ENTRIES = 1000;
 const DEDUP_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 const DEDUP_PATH = join(homedir(), '.neoclaw', 'cache', 'feishu-dedup.json');
 
