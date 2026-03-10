@@ -42,6 +42,17 @@ export interface FeishuConfig {
   groupAutoReply?: string[];
 }
 
+export interface WeworkConfig {
+  /** Bot ID - 企业微信智能机器人 ID */
+  botId: string;
+  /** Secret - 企业微信智能机器人密钥 */
+  secret: string;
+  /** WebSocket URL（可选，默认 wss://openws.work.weixin.qq.com） */
+  websocketUrl?: string;
+  /** 自动回复的群聊 ID 列表 */
+  groupAutoReply?: string[];
+}
+
 export interface McpServerConfig {
   type: 'stdio' | 'http' | 'sse';
   command?: string;
@@ -54,6 +65,8 @@ export interface McpServerConfig {
 export interface NeoClawConfig {
   agent: AgentConfig;
   feishu: FeishuConfig;
+  /** 企业微信配置（可选） */
+  wework?: WeworkConfig;
   /** MCP servers to expose to agents. Keyed by server name. */
   mcpServers?: Record<string, McpServerConfig>;
   /** Directory for agent workspaces. Default: ~/.neoclaw/workspaces. */
@@ -111,6 +124,11 @@ export const DEFAULTS: NeoClawConfig = {
     verificationToken: '',
     encryptKey: '',
     domain: 'feishu',
+    groupAutoReply: [],
+  },
+  wework: {
+    botId: '',
+    secret: '',
     groupAutoReply: [],
   },
   mcpServers: {},
@@ -171,6 +189,12 @@ export function loadConfig(): NeoClawConfig {
       encryptKey: opt('FEISHU_ENCRYPT_KEY', file.feishu?.encryptKey),
       domain: str('FEISHU_DOMAIN', file.feishu?.domain, 'feishu'),
       groupAutoReply: arr('FEISHU_GROUP_AUTO_REPLY', file.feishu?.groupAutoReply, []),
+    },
+    wework: {
+      botId: str('WEWORK_BOT_ID', file.wework?.botId, ''),
+      secret: str('WEWORK_SECRET', file.wework?.secret, ''),
+      websocketUrl: opt('WEWORK_WEBSOCKET_URL', file.wework?.websocketUrl),
+      groupAutoReply: arr('WEWORK_GROUP_AUTO_REPLY', file.wework?.groupAutoReply, []),
     },
     mcpServers: file.mcpServers ?? {},
     workspacesDir: str(

@@ -25,6 +25,11 @@ const TEMPLATE = {
     appId: 'YOUR_FEISHU_APP_ID',
     appSecret: 'YOUR_FEISHU_APP_SECRET',
   },
+  wework: {
+    ...DEFAULTS.wework,
+    botId: 'YOUR_WEWORK_BOT_ID',
+    secret: 'YOUR_WEWORK_SECRET',
+  },
 };
 
 export async function runOnboard(): Promise<void> {
@@ -60,12 +65,18 @@ export async function runOnboard(): Promise<void> {
 
   console.log();
   console.log('Next steps:');
-  console.log('  1. Open the config file and fill in your Feishu credentials:');
+  console.log('  1. Open the config file and fill in your gateway credentials:');
   console.log(`     ${CONFIG_PATH}`);
   console.log();
-  console.log('  Required fields:');
+  console.log('  Required fields (at least one gateway must be configured):');
+  console.log();
+  console.log('  Feishu (飞书):');
   console.log('     feishu.appId           — from Feishu Open Platform');
   console.log('     feishu.appSecret        — from Feishu Open Platform');
+  console.log();
+  console.log('  Wework (企业微信智能助手):');
+  console.log('     wework.botId            — from Wework Bot Settings (长连接模式)');
+  console.log('     wework.secret           — from Wework Bot Settings');
   console.log();
   console.log('  2. Make sure Claude Code is installed:');
   console.log('     npm install -g @anthropic-ai/claude-code');
@@ -76,7 +87,7 @@ export async function runOnboard(): Promise<void> {
   console.log('  4. Add ~/.neoclaw/bin to your PATH (for neoclaw-cron and other CLI tools):');
   console.log('     echo \'export PATH="$HOME/.neoclaw/bin:$PATH"\' >> ~/.zshrc  # or ~/.bashrc');
   console.log();
-  console.log('  5. In Feishu, send a message to your bot to test it!');
+  console.log('  5. Send a message to your bot to test it!');
   console.log();
 }
 
@@ -87,10 +98,19 @@ function initConfig(): void {
     let hasRealCredentials = false;
     try {
       const cfg = JSON.parse(existing);
-      hasRealCredentials =
+      // Check if at least one gateway is properly configured (二选一即可)
+      const feishuOk =
         typeof cfg?.feishu?.appId === 'string' &&
         cfg.feishu.appId !== '' &&
         !cfg.feishu.appId.startsWith('YOUR_');
+      const weworkOk =
+        typeof cfg?.wework?.botId === 'string' &&
+        cfg.wework.botId !== '' &&
+        !cfg.wework.botId.startsWith('YOUR_') &&
+        typeof cfg?.wework?.secret === 'string' &&
+        cfg.wework.secret !== '' &&
+        !cfg.wework.secret.startsWith('YOUR_');
+      hasRealCredentials = feishuOk || weworkOk;
     } catch {
       /* parse error — overwrite */
     }

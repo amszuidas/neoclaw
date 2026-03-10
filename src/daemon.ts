@@ -87,7 +87,7 @@ export class NeoClawDaemon {
     this._registerSignals();
     this._ensureDirs();
 
-    const dispatcher = this._buildDispatcher();
+    const dispatcher = await this._buildDispatcher();
     const scheduler = new CronScheduler(dispatcher);
 
     log.info('='.repeat(60));
@@ -243,7 +243,7 @@ export class NeoClawDaemon {
 
   // ── Component assembly ────────────────────────────────────
 
-  private _buildDispatcher(): Dispatcher {
+  private async _buildDispatcher(): Promise<Dispatcher> {
     const dispatcher = new Dispatcher();
 
     // Build and register the agent
@@ -285,9 +285,36 @@ export class NeoClawDaemon {
     if (this.config.feishu.appId && this.config.feishu.appSecret) {
       const feishu = new FeishuGateway(this.config.feishu);
       dispatcher.addGateway(feishu);
+      log.info('Feishu gateway registered');
     } else {
-      log.error('Feishu credentials not configured — gateway not started');
-      throw new Error('Feishu credentials not configured — gateway not started');
+      log.warn('Feishu credentials not configured — Feishu gateway not started');
+    }
+
+    // Register Wework gateway if credentials are present
+    if (this.config.wework?.botId && this.config.wework?.secret) {
+      const { WeworkWsGateway } = await import('./gateway/wework/ws-gateway.js');
+      const weworkConfig = {
+        botId: this.config.wework.botId,
+        secret: this.config.wework.secret,
+        websocketUrl: this.config.wework.websocketUrl,
+      };
+      const wework = new WeworkWsGateway(weworkConfig);
+      dispatcher.addGateway(wework);
+      log.info('Wework WebSocket gateway registered');
+    } else {
+      log.warn('Wework WebSocket credentials not configured — Wework gateway not started');
+    }
+
+    // Ensure at least one gateway is configured
+    // Only error if both gateways are missing credentials
+    if (
+      (!this.config.feishu.appId || !this.config.feishu.appSecret) &&
+      (!this.config.wework?.botId || !this.config.wework?.secret)
+    ) {
+      log.error('No gateway credentials configured — at least one of Feishu or Wework must be configured');
+      throw new Error(
+        'No gateway credentials configured — at least one of Feishu or Wework must be configured'
+      );
     }
 
     // Wire up restart handler

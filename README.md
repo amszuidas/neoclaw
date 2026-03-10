@@ -7,7 +7,7 @@
   </p>
   <p>
     NeoClaw is a scalable AI super assistant designed with a Gateway architecture.<br/>
-    It currently supports <strong>Feishu (Lark)</strong> as the messaging gateway and <strong>Claude Code</strong> as the powerful AI backend.
+    It currently supports <strong>Feishu (Lark)</strong> and <strong>WeCom (企业微信)</strong> as messaging gateways, with <strong>Claude Code</strong> as the powerful AI backend.
   </p>
   <p>
     <a href="README.zh-CN.md">中文</a> | <strong>English</strong>
@@ -30,6 +30,9 @@
 - [Memory System](#-memory-system)
 - [Tech Stack](#-tech-stack)
 - [Directory Structure](#-directory-structure)
+- [Gateway Configuration](#gateway-configuration)
+  - [Feishu Configuration](#feishu-configuration)
+  - [WeCom Configuration](#wecom-configuration)
 - [Contributing](#-contributing)
 - [License](#-license)
 
@@ -37,14 +40,20 @@
 
 - **Full Claude Code Support**: Powered by the world's most powerful Agent, seamlessly supporting everything from Claude Code (including Plugins, Skills, MCPs, etc.), delivering the most powerful AI capabilities.
 
-- **Multi-Scenario Support**: Perfectly adapts to various Feishu scenarios such as private chats, group chats, and topic groups.
+- **Multi-Platform Support**: Currently supports Feishu (Lark) and WeCom (企业微信).
+  - **Feishu**: Perfectly adapts to various scenarios such as private chats, group chats, and topic groups.
+  - **WeCom**: Supports enterprise messaging with HTTP callback integration.
+
+- **Multi-Scenario Support**:
   - **Group Chat Support**: Mention @NeoClaw in group chats to trigger a reply.
     <br/><img src="imgs/demo/group.png" width="300" alt="Group Chat" />
-  - **Topic Group Support**: Supports discussing multiple topics simultaneously in topic groups.
+  - **Topic Group Support**: Supports discussing multiple topics simultaneously in topic groups (Feishu only).
     <br/><img src="imgs/demo/threads.jpeg" width="300" alt="Threads" />
 
-- **Streaming Response**: Uses Feishu cards to achieve a typewriter-style streaming output.
-  <br/><img src="imgs/demo/streaming.png" width="300" alt="Streaming" />
+- **Streaming Response**:
+  - **Feishu**: Uses streaming cards to achieve a typewriter-style streaming output.
+  - **WeCom**: Simulates streaming with chunked message updates.
+    <br/><img src="imgs/demo/streaming.png" width="300" alt="Streaming" />
 
 - **Clarification**: Supports interactive forms, utilizing Claude Code's `AskUserQuestion` tool to proactively clarify requirements.
   <br/><img src="imgs/demo/form.png" width="300" alt="Form" />
@@ -80,6 +89,7 @@
 - [Bun](https://bun.sh) (v1.0+)
 - **Claude Code**: Please refer to the [Claude Code Installation Guide](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) for installation and configuration.
   > **Note**: If you do not want to subscribe to Claude Code, you can configure `~/.claude/settings.json` to use a custom API:
+  >
   > ```json
   > {
   >   "env": {
@@ -92,7 +102,7 @@
   >   }
   > }
   > ```
-- Feishu Open Platform account and app (requires configuration of corresponding permissions and event subscriptions). For detailed configuration, please refer to the [Feishu Bot Configuration Guide](FEISHU_CONFIG.md).
+- **At least one messaging platform**: Either Feishu (Lark) or WeCom (企业微信) account and app.
 
 ### Installation
 
@@ -110,35 +120,41 @@ bun onboard
 
 2. Edit `~/.neoclaw/config.json`:
 
-> **Tip**: For details on how to obtain the `appId`, `appSecret`, etc., for your Feishu app, please read the [Feishu Bot Configuration Guide](FEISHU_CONFIG.md).
+> **Tip**: Configure **either Feishu (Lark)** or **WeCom**. Both gateways can be enabled simultaneously if needed.
 
 ```jsonc
 {
   "agent": {
     "type": "claude_code",
-    "model": "claude-sonnet-4-6",  // Custom Claude Model
-    "systemPrompt": "",            // Custom System Prompt
-    "allowedTools": [],            // List of Allowed Tools
-    "timeoutSecs": 600             // Timeout (seconds)
+    "model": "claude-sonnet-4-6", // Custom Claude Model
+    "systemPrompt": "", // Custom System Prompt
+    "allowedTools": [], // List of Allowed Tools
+    "timeoutSecs": 600, // Timeout (seconds)
   },
   "feishu": {
-    "appId": "your_app_id",        // Feishu App ID
-    "appSecret": "your_app_secret",// Feishu App Secret
-    "verificationToken": "",       // Event Subscription Verification Token
-    "encryptKey": "",              // Event Subscription Encrypt Key
-    "domain": "feishu",            // "feishu" or "lark"
-    "groupAutoReply": []           // List of Group IDs for Auto-Reply
+    "appId": "your_app_id", // Feishu App ID (optional if using WeCom)
+    "appSecret": "your_app_secret", // Feishu App Secret (optional if using WeCom)
+    "verificationToken": "", // Event Subscription Verification Token
+    "encryptKey": "", // Event Subscription Encrypt Key
+    "domain": "feishu", // "feishu" or "lark"
+    "groupAutoReply": [], // List of Group IDs for Auto-Reply
   },
-  "mcpServers": {                  // MCP Servers (hot-reloaded on new process)
+  "wework": {
+    "botId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", // WeCom Bot ID
+    "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // WeCom Bot Secret
+    "groupAutoReply": [], // List of Group IDs for Auto-Reply
+  },
+  "mcpServers": {
+    // MCP Servers (hot-reloaded on new process)
     "example-server": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@example/mcp-server"]
-    }
+      "args": ["-y", "@example/mcp-server"],
+    },
   },
-  "skillsDir": "~/.neoclaw/skills",// Skills directory
+  "skillsDir": "~/.neoclaw/skills", // Skills directory
   "logLevel": "info",
-  "workspacesDir": "~/.neoclaw/workspaces"
+  "workspacesDir": "~/.neoclaw/workspaces",
 }
 ```
 
@@ -220,14 +236,14 @@ Add MCP servers in `~/.neoclaw/config.json` under the `mcpServers` field:
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@example/mcp-server"],
-      "env": { "API_KEY": "xxx" }
+      "env": { "API_KEY": "xxx" },
     },
     "remote-server": {
       "type": "http",
       "url": "https://mcp.example.com/sse",
-      "headers": { "Authorization": "Bearer xxx" }
-    }
-  }
+      "headers": { "Authorization": "Bearer xxx" },
+    },
+  },
 }
 ```
 
@@ -262,11 +278,11 @@ NeoClaw has a three-layer memory system with SQLite FTS5 full-text indexing, exp
 
 All memory files use the same frontmatter format (`title`, `date`, `tags`).
 
-| Category | Description | Read | Write |
-|----------|-------------|------|-------|
-| **identity** | Personality, values, communication style | `memory_read` / `memory_search` / `memory_list` | `memory_save` with `category="identity"` |
-| **knowledge** | Topic-organized persistent knowledge | `memory_read` / `memory_search` / `memory_list` | `memory_save` with `topic` + `content` |
-| **episode** | Auto-generated session summaries | `memory_read` / `memory_search` / `memory_list` | Automatic on `/clear` or `/new` |
+| Category      | Description                              | Read                                            | Write                                    |
+| ------------- | ---------------------------------------- | ----------------------------------------------- | ---------------------------------------- |
+| **identity**  | Personality, values, communication style | `memory_read` / `memory_search` / `memory_list` | `memory_save` with `category="identity"` |
+| **knowledge** | Topic-organized persistent knowledge     | `memory_read` / `memory_search` / `memory_list` | `memory_save` with `topic` + `content`   |
+| **episode**   | Auto-generated session summaries         | `memory_read` / `memory_search` / `memory_list` | Automatic on `/clear` or `/new`          |
 
 ### MCP Server Integration
 
@@ -282,6 +298,7 @@ The memory system runs as a standalone stdio MCP server (`neoclaw-memory`), auto
 ### Session Summarization
 
 When `/clear` or `/new` is used, the dispatcher generates an episodic memory entry:
+
 1. Reads conversation history from `.history/` (only new content since last summary, tracked via `.last-summarized-offset`)
 2. Calls Claude (haiku model) to produce a structured summary
 3. Saves to `episodes/` and updates the FTS5 index
@@ -297,7 +314,7 @@ When `/clear` or `/new` is used, the dispatcher generates an episodic memory ent
 
 - **Runtime**: [Bun](https://bun.sh) (High-performance JavaScript Runtime)
 - **Language**: TypeScript (Strict Mode)
-- **SDK**: `@larksuiteoapi/node-sdk`
+- **SDK**: `@larksuiteoapi/node-sdk`, Native fetch for WeCom
 - **Linting**: ESLint + Prettier
 
 ## 📂 Directory Structure
@@ -309,7 +326,8 @@ neoclaw/
 │   ├── cli/              # CLI Tools (Cron Management)
 │   ├── cron/             # Scheduled Task Core Logic
 │   ├── gateway/          # Messaging Gateway Adapter
-│   │   └── feishu/       # Feishu Adapter Implementation
+│   │   ├── feishu/       # Feishu Adapter Implementation
+│   │   └── wework/       # WeCom Adapter Implementation
 │   ├── templates/        # Memory and Configuration Templates
 │   ├── utils/            # General Utility Functions
 │   ├── config.ts         # Configuration Management
@@ -317,8 +335,48 @@ neoclaw/
 │   ├── dispatcher.ts     # Message Dispatch Core
 │   └── index.ts          # Program Entry
 ├── CLAUDE.md             # Claude Code Guide
+├── FEISHU_CONFIG.md      # Feishu Configuration Guide
+├── WEWORK_CONFIG.md      # WeCom Configuration Guide
 └── package.json
 ```
+
+## 🌐 Gateway Configuration
+
+### Feishu Configuration
+
+For detailed instructions on configuring Feishu (Lark), see [FEISHU_CONFIG.md](FEISHU_CONFIG.md).
+
+Key steps:
+
+1. Create a Feishu app at [Feishu Open Platform](https://open.feishu.cn/)
+2. Configure event subscriptions (message receive, card action trigger)
+3. Get `appId`, `appSecret`, `verificationToken`, `encryptKey`
+4. Update `~/.neoclaw/config.json` with your credentials
+
+### WeCom Configuration
+
+For detailed instructions on configuring WeCom, see [WEWORK_BOT.md](WEWORK_BOT.md).
+
+Key steps:
+
+1. Create a Bot at [WeCom Management Console](https://work.weixin.qq.com/) → Application Management → Smart Assistant
+2. Choose **API Mode** → **Long Connection Method**
+3. Get `botId` and `secret`
+4. Update `~/.neoclaw/config.json` with your credentials
+
+**Note**: Both gateways can be configured and used simultaneously if needed.
+
+### Platform Feature Comparison
+
+| Feature           | Feishu            | WeCom Bot                   |
+| ----------------- | ----------------- | --------------------------- |
+| Connection        | WebSocket         | WebSocket (Long Connection) |
+| Streaming Cards   | ✅ Native support | ⚠️ Chunked messages         |
+| Interactive Forms | ✅ Card buttons   | ⚠️ Markdown format          |
+| @Mentions         | ✅                | ✅                          |
+| Threads           | ✅                | ❌                          |
+| Images/Files      | ✅                | ✅                          |
+| Server Required   | ✅ Yes            | ❌ No                       |
 
 ## 🤝 Contributing
 
