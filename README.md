@@ -336,7 +336,7 @@ neoclaw/
 │   └── index.ts          # Program Entry
 ├── CLAUDE.md             # Claude Code Guide
 ├── FEISHU_CONFIG.md      # Feishu Configuration Guide
-├── WEWORK_CONFIG.md      # WeCom Configuration Guide
+├── WEWORK_BOT.md      # WeCom Configuration Guide
 └── package.json
 ```
 
