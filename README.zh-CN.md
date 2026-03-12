@@ -40,12 +40,13 @@
 
 - **完整 Claude Code 支持**: 由世界上最强大的 Agent 驱动，完美支持 Claude Code 的一切能力（包括 Plugins、Skills、MCPs 等），提供最强大的 AI 协作体验。
 
-- **多平台支持**: 目前支持飞书和企业微信。
+- **多平台支持**: 目前支持飞书、企业微信和 Gateway Dashboard。
   - **飞书**: 完美适配私聊、群聊、话题群等多种场景。
   - **群聊支持**: 在群聊中 @NeoClaw 即可唤起回复。
     <br/><img src="imgs/demo/group.png" width="300" alt="Group Chat" />
   - **话题群支持**: 支持在话题群中同时进行多个话题的讨论。
     <br/><img src="imgs/demo/threads.jpeg" width="300" alt="Threads" />
+  - **Dashboard**: 基于 Web 的界面，可直接在浏览器中与 AI 对话。
 
 - **流式响应**:
   - **飞书**: 利用流式卡片实现打字机效果的流畅输出。
@@ -146,6 +147,11 @@ bun onboard
     "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // 企业微信机器人 Secret
     "groupAutoReply": [], // 自动回复的群聊ID列表
   },
+  "dashboard": {
+    "enabled": true, // 启用 Gateway Dashboard
+    "port": 3000, // 后端 WebSocket 服务器端口
+    "cors": true, // 启用 CORS
+  },
   "mcpServers": {
     // MCP Servers（新进程启动时热加载）
     "example-server": {
@@ -167,6 +173,32 @@ bun start
 ```
 
 服务将自动守护进程化，后台运行，日志输出到 `~/.neoclaw/logs/neoclaw.log`。
+
+### 访问 Dashboard
+
+如果您在配置中启用了 Dashboard Gateway：
+
+```jsonc
+{
+  "dashboard": {
+    "enabled": true,
+    "port": 3000,
+  },
+}
+```
+
+启动服务后，在浏览器中访问：
+
+```
+http://localhost:5173
+```
+
+Dashboard 提供 Web 界面与 NeoClaw 对话，支持：
+
+- 实时流式响应
+- 会话管理
+- Markdown 渲染与代码高亮
+- 思考面板（展示 Claude 的推理过程）
 
 ### 开发模式
 
@@ -344,6 +376,31 @@ neoclaw/
 
 ## 🌐 网关配置
 
+### Dashboard 配置
+
+Dashboard Gateway 提供 Web 界面，可直接在浏览器中与 NeoClaw 交互。在 `~/.neoclaw/config.json` 中启用：
+
+```jsonc
+{
+  "dashboard": {
+    "enabled": true, // 启用 Dashboard Gateway
+    "port": 3000, // 后端 WebSocket 服务器端口（默认：3000）
+    "cors": true, // 启用 CORS（默认：true）
+  },
+}
+```
+
+**环境变量：**
+
+- `NEOCLAW_DASHBOARD_ENABLED`: 设置为 `true` 启用
+- `NEOCLAW_DASHBOARD_PORT`: 后端服务器端口号
+- `NEOCLAW_DASHBOARD_CORS`: 设置为 `false` 禁用 CORS
+
+**访问地址：**
+
+- 前端界面：`http://localhost:5173`
+- WebSocket 端点：`ws://localhost:3000/ws`
+
 ### 飞书配置
 
 关于配置飞书的详细说明，请参阅 [FEISHU_CONFIG.md](FEISHU_CONFIG.md)。
@@ -366,19 +423,19 @@ neoclaw/
 3. 获取 `botId` 和 `secret`
 4. 在 `~/.neoclaw/config.json` 中更新您的凭据
 
-**注意**: 如需要，可以同时配置并使用两个网关。
+**注意**: 如需要，可以同时配置并使用三个网关。
 
 ### 平台功能对比
 
-| 功能       | 飞书        | 企业微信机器人      |
-| ---------- | ----------- | ------------------- |
-| 连接方式   | WebSocket   | WebSocket（长连接） |
-| 流式卡片   | ✅ 原生支持 | ⚠️ 分块消息         |
-| 交互式表单 | ✅ 卡片按钮 | ⚠️ Markdown 格式    |
-| @提及      | ✅          | ✅                  |
-| 话题线程   | ✅          | ❌                  |
-| 图片/文件  | ✅          | ✅                  |
-| 需要服务器 | ✅ 是       | ❌ 否               |
+| 功能       | 飞书        | 企业微信机器人      | Dashboard       |
+| ---------- | ----------- | ------------------- | --------------- |
+| 连接方式   | WebSocket   | WebSocket（长连接） | WebSocket       |
+| 流式卡片   | ✅ 原生支持 | ⚠️ 分块消息         | ✅ 实时流式响应 |
+| 交互式表单 | ✅ 卡片按钮 | ⚠️ Markdown 格式    | ❌              |
+| @提及      | ✅          | ✅                  | ❌              |
+| 话题线程   | ✅          | ❌                  | ✅ 会话管理     |
+| 图片/文件  | ✅          | ✅                  | ❌              |
+| 需要服务器 | ✅ 是       | ❌ 否               | ✅ 是           |
 
 ## 🤝 贡献指南
 

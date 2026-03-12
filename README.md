@@ -40,9 +40,10 @@
 
 - **Full Claude Code Support**: Powered by the world's most powerful Agent, seamlessly supporting everything from Claude Code (including Plugins, Skills, MCPs, etc.), delivering the most powerful AI capabilities.
 
-- **Multi-Platform Support**: Currently supports Feishu (Lark) and WeCom.
+- **Multi-Platform Support**: Currently supports Feishu (Lark), WeCom, and Gateway Dashboard.
   - **Feishu**: Perfectly adapts to various scenarios such as private chats, group chats, and topic groups.
   - **WeCom**: Supports enterprise messaging with HTTP callback integration.
+  - **Dashboard**: Web-based interface for direct AI interaction through your browser.
 
 - **Multi-Scenario Support**:
   - **Group Chat Support**: Mention @NeoClaw in group chats to trigger a reply.
@@ -144,6 +145,11 @@ bun onboard
     "secret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", // WeCom Bot Secret
     "groupAutoReply": [], // List of Group IDs for Auto-Reply
   },
+  "dashboard": {
+    "enabled": true, // Enable Dashboard Gateway
+    "port": 3000, // Backend WebSocket server port
+    "cors": true, // Enable CORS
+  },
   "mcpServers": {
     // MCP Servers (hot-reloaded on new process)
     "example-server": {
@@ -165,6 +171,32 @@ bun start
 ```
 
 The service will automatically daemonize and run in the background, with logs output to `~/.neoclaw/logs/neoclaw.log`.
+
+### Access Dashboard
+
+If you have enabled the Dashboard Gateway in your configuration:
+
+```jsonc
+{
+  "dashboard": {
+    "enabled": true,
+    "port": 3000,
+  },
+}
+```
+
+After starting the service, open your browser and visit:
+
+```
+http://localhost:5173
+```
+
+The Dashboard provides a web interface for chatting with NeoClaw, supporting:
+
+- Real-time streaming responses
+- Session management
+- Markdown rendering with syntax highlighting
+- Thinking panel for Claude's reasoning process
 
 ### Development Mode
 
@@ -342,6 +374,31 @@ neoclaw/
 
 ## 🌐 Gateway Configuration
 
+### Dashboard Configuration
+
+The Dashboard Gateway provides a web-based interface for interacting with NeoClaw directly in your browser. Enable it in `~/.neoclaw/config.json`:
+
+```jsonc
+{
+  "dashboard": {
+    "enabled": true, // Enable Dashboard Gateway
+    "port": 3000, // Backend WebSocket server port (default: 3000)
+    "cors": true, // Enable CORS (default: true)
+  },
+}
+```
+
+**Environment variables:**
+
+- `NEOCLAW_DASHBOARD_ENABLED`: Set to `true` to enable
+- `NEOCLAW_DASHBOARD_PORT`: Port number for backend server
+- `NEOCLAW_DASHBOARD_CORS`: Set to `false` to disable CORS
+
+**Access URLs:**
+
+- Frontend: `http://localhost:5173`
+- WebSocket: `ws://localhost:3000/ws`
+
 ### Feishu Configuration
 
 For detailed instructions on configuring Feishu (Lark), see [FEISHU_CONFIG.md](FEISHU_CONFIG.md).
@@ -364,19 +421,19 @@ Key steps:
 3. Get `botId` and `secret`
 4. Update `~/.neoclaw/config.json` with your credentials
 
-**Note**: Both gateways can be configured and used simultaneously if needed.
+**Note**: All three gateways can be configured and used simultaneously if needed.
 
 ### Platform Feature Comparison
 
-| Feature           | Feishu            | WeCom Bot                   |
-| ----------------- | ----------------- | --------------------------- |
-| Connection        | WebSocket         | WebSocket (Long Connection) |
-| Streaming Cards   | ✅ Native support | ⚠️ Chunked messages         |
-| Interactive Forms | ✅ Card buttons   | ⚠️ Markdown format          |
-| @Mentions         | ✅                | ✅                          |
-| Threads           | ✅                | ❌                          |
-| Images/Files      | ✅                | ✅                          |
-| Server Required   | ✅ Yes            | ❌ No                       |
+| Feature           | Feishu            | WeCom Bot                   | Dashboard              |
+| ----------------- | ----------------- | --------------------------- | ---------------------- |
+| Connection        | WebSocket         | WebSocket (Long Connection) | WebSocket              |
+| Streaming Cards   | ✅ Native support | ⚠️ Chunked messages         | ✅ Real-time streaming |
+| Interactive Forms | ✅ Card buttons   | ⚠️ Markdown format          | ❌                     |
+| @Mentions         | ✅                | ✅                          | ❌                     |
+| Threads           | ✅                | ❌                          | ✅ Session management  |
+| Images/Files      | ✅                | ✅                          | ❌                     |
+| Server Required   | ✅ Yes            | ❌ No                       | ✅ Yes                 |
 
 ## 🤝 Contributing
 

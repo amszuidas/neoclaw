@@ -305,15 +305,26 @@ export class NeoClawDaemon {
       log.warn('Wework WebSocket credentials not configured — Wework gateway not started');
     }
 
+    // Register Dashboard gateway if enabled
+    if (this.config.dashboard?.enabled) {
+      const { DashboardGateway } = await import('./gateway/dashboard/gateway.js');
+      const dashboard = new DashboardGateway(this.config.dashboard);
+      const port = this.config.dashboard.port ?? 3000;
+      dispatcher.addGateway(dashboard);
+      log.info(`Dashboard gateway registered on http://localhost:${port}`);
+    } else {
+      log.info('Dashboard gateway not enabled — skip starting dashboard web interface');
+    }
+
     // Ensure at least one gateway is configured
-    // Only error if both gateways are missing credentials
-    if (
-      (!this.config.feishu.appId || !this.config.feishu.appSecret) &&
-      (!this.config.wework?.botId || !this.config.wework?.secret)
-    ) {
-      log.error('No gateway credentials configured — at least one of Feishu or Wework must be configured');
+    const hasFeishu = this.config.feishu.appId && this.config.feishu.appSecret;
+    const hasWework = this.config.wework?.botId && this.config.wework?.secret;
+    const hasDashboard = this.config.dashboard?.enabled;
+
+    if (!hasFeishu && !hasWework && !hasDashboard) {
+      log.error('No gateway configured — at least one of Feishu, Wework, or Dashboard gateway must be configured');
       throw new Error(
-        'No gateway credentials configured — at least one of Feishu or Wework must be configured'
+        'No gateway configured — at least one of Feishu, Wework, or Dashboard gateway must be configured'
       );
     }
 

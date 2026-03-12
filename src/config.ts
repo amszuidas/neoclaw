@@ -53,6 +53,15 @@ export interface WeworkConfig {
   groupAutoReply?: string[];
 }
 
+export interface DashboardConfig {
+  /** 是否启用 Gateway Dashboard */
+  enabled?: boolean;
+  /** HTTP 服务端口 */
+  port?: number;
+  /** 是否启用 CORS */
+  cors?: boolean;
+}
+
 export interface McpServerConfig {
   type: 'stdio' | 'http' | 'sse';
   command?: string;
@@ -67,6 +76,8 @@ export interface NeoClawConfig {
   feishu: FeishuConfig;
   /** 企业微信配置（可选） */
   wework?: WeworkConfig;
+  /** Gateway Dashboard 配置（可选） */
+  dashboard?: DashboardConfig;
   /** MCP servers to expose to agents. Keyed by server name. */
   mcpServers?: Record<string, McpServerConfig>;
   /** Directory for agent workspaces. Default: ~/.neoclaw/workspaces. */
@@ -130,6 +141,11 @@ export const DEFAULTS: NeoClawConfig = {
     botId: '',
     secret: '',
     groupAutoReply: [],
+  },
+  dashboard: {
+    enabled: false,
+    port: 3000,
+    cors: true,
   },
   mcpServers: {},
   skillsDir: join(NEOCLAW_HOME, 'skills'),
@@ -195,6 +211,11 @@ export function loadConfig(): NeoClawConfig {
       secret: str('WEWORK_SECRET', file.wework?.secret, ''),
       websocketUrl: opt('WEWORK_WEBSOCKET_URL', file.wework?.websocketUrl),
       groupAutoReply: arr('WEWORK_GROUP_AUTO_REPLY', file.wework?.groupAutoReply, []),
+    },
+    dashboard: {
+      enabled: env['NEOCLAW_DASHBOARD_ENABLED'] === 'true' || file.dashboard?.enabled || false,
+      port: num('NEOCLAW_DASHBOARD_PORT', file.dashboard?.port, 3000),
+      cors: env['NEOCLAW_DASHBOARD_CORS'] === 'false' ? false : (file.dashboard?.cors ?? true),
     },
     mcpServers: file.mcpServers ?? {},
     workspacesDir: str(
