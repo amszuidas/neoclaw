@@ -26,18 +26,17 @@
 
 1. 登录[企业微信]客户端
 2. 侧边栏点击 **工作台**，搜索 **智能机器人**，点击 **创建机器人**
-   <br/><img src="imgs/config/wework-0.png" width="600" alt="Streaming" />
+   <br/><img src="../imgs/config/wework-0.png" width="600" alt="Streaming" />
 3. 选择 **手动创建**
-   <br/><img src="imgs/config/wework-1.png" width="600" alt="Streaming" />
+   <br/><img src="../imgs/config/wework-1.png" width="600" alt="Streaming" />
 
 4. 拉到最低，选择 **API 模式创建**
-   <br/><img src="imgs/config/wework-2.png" width="600" alt="Streaming" />
-   ![alt text](image.png)
+   <br/><img src="../imgs/config/wework-2.png" width="600" alt="Streaming" />
 5. 选择 **长连接方式**，创建完成后，会显示：
 
 - **Bot ID**: 类似 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
 - **Secret**: 类似 `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-  <br/><img src="imgs/config/wework-3.png" width="600" alt="Streaming" />
+  <br/><img src="../imgs/config/wework-3.png" width="600" alt="Streaming" />
 
 ---
 

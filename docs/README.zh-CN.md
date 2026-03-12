@@ -1,5 +1,5 @@
 <div align="center">
-  <h1><img src="imgs/logo.png" width="45" alt="Logo" /> NeoClaw</h1>
+  <h1><img src="../imgs/logo.png" width="45" alt="Logo" /> NeoClaw</h1>
   <p>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
     <img src="https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white" alt="TypeScript">
@@ -10,9 +10,9 @@
     目前支持将 <strong>飞书</strong> 和 <strong>企业微信</strong> 作为消息网关，<strong>Claude Code</strong> 作为强大的 AI 后端。
   </p>
   <p>
-    <strong>中文</strong> | <a href="README.md">English</a>
+    <strong>中文</strong> | <a href="../README.md">English</a>
   </p>
-  <img src="imgs/demo/identity.png" width="300" alt="Identity" />
+  <img src="../imgs/demo/identity.png" width="300" alt="Identity" />
 </div>
 
 ## 📖 目录
@@ -43,28 +43,28 @@
 - **多平台支持**: 目前支持飞书、企业微信和 Gateway Dashboard。
   - **飞书**: 完美适配私聊、群聊、话题群等多种场景。
   - **群聊支持**: 在群聊中 @NeoClaw 即可唤起回复。
-    <br/><img src="imgs/demo/group.png" width="300" alt="Group Chat" />
+    <br/><img src="../imgs/demo/group.png" width="300" alt="Group Chat" />
   - **话题群支持**: 支持在话题群中同时进行多个话题的讨论。
-    <br/><img src="imgs/demo/threads.jpeg" width="300" alt="Threads" />
+    <br/><img src="../imgs/demo/threads.jpeg" width="300" alt="Threads" />
   - **Dashboard**: 基于 Web 的界面，可直接在浏览器中与 AI 对话。
 
 - **流式响应**:
   - **飞书**: 利用流式卡片实现打字机效果的流畅输出。
   - **企业微信**: 通过分块消息更新模拟流式输出。
-    <br/><img src="imgs/demo/streaming.png" width="300" alt="Streaming" />
+    <br/><img src="../imgs/demo/streaming.png" width="300" alt="Streaming" />
 
 - **问题澄清**: 支持交互式问卷，利用 Claude Code 的 `AskUserQuestion` 工具主动澄清需求。
-  <br/><img src="imgs/demo/form.png" width="300" alt="Form" />
+  <br/><img src="../imgs/demo/form.png" width="300" alt="Form" />
 
 - **多模态支持**: 支持飞书发送图片消息，Claude Code 可直接理解图片内容。
-  <br/><img src="imgs/demo/image.png" width="300" alt="Image Understanding" />
+  <br/><img src="../imgs/demo/image.png" width="300" alt="Image Understanding" />
 
 - **工作区隔离**: 每个会话拥有独立的工作目录 (`~/.neoclaw/workspaces/<conversationId>`)
 
 - **并发控制**: 每个会话拥有独立的加锁队列，确保消息按顺序处理，避免并发冲突。
 
 - **定时任务**: 支持 Cron 表达式创建和管理定时任务。
-  <br/><img src="imgs/demo/cron.png" width="300" alt="Cron Jobs" />
+  <br/><img src="../imgs/demo/cron.png" width="300" alt="Cron Jobs" />
 
 - **三层记忆系统**:
   - **身份记忆** (`identity/SOUL.md`): 性格、价值观、沟通风格
@@ -76,7 +76,7 @@
 - **斜杠命令**:
   - `/clear`: 清除当前会话记忆
   - `/restart`: 重启服务
-    <br/><img src="imgs/demo/restart.png" width="300" alt="Restart" />
+    <br/><img src="../imgs/demo/restart.png" width="300" alt="Restart" />
   - `/status`: 查看当前状态
   - `/help`: 获取帮助信息
 
@@ -368,9 +368,11 @@ neoclaw/
 │   ├── daemon.ts         # 守护进程逻辑
 │   ├── dispatcher.ts     # 消息分发核心
 │   └── index.ts          # 程序入口
-├── CLAUDE.md             # Claude Code 指南
-├── FEISHU_CONFIG.md      # 飞书配置指南
-├── WEWORK_BOT.md      # 企业微信配置指南
+├── docs/                 # 文档目录
+│   ├── CLAUDE.md         # Claude Code 指南
+│   ├── FEISHU_CONFIG.md  # 飞书配置指南
+│   ├── WEWORK_BOT.md     # 企业微信配置指南
+│   └── README.zh-CN.md   # 中文 README
 └── package.json
 ```
 

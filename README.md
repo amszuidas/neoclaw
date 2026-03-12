@@ -10,7 +10,7 @@
     It currently supports <strong>Feishu (Lark)</strong> and <strong>WeCom</strong> as messaging gateways, with <strong>Claude Code</strong> as the powerful AI backend.
   </p>
   <p>
-    <a href="README.zh-CN.md">中文</a> | <strong>English</strong>
+    <a href="docs/README.zh-CN.md">中文</a> | <strong>English</strong>
   </p>
   <img src="imgs/demo/identity.png" width="300" alt="Identity" />
 </div>
@@ -197,6 +197,7 @@ The Dashboard provides a web interface for chatting with NeoClaw, supporting:
 - Session management
 - Markdown rendering with syntax highlighting
 - Thinking panel for Claude's reasoning process
+  <br/><img src="imgs/config/dashboard.png" width="600" alt="Dashboard" />
 
 ### Development Mode
 
@@ -366,9 +367,11 @@ neoclaw/
 │   ├── daemon.ts         # Daemon Process Logic
 │   ├── dispatcher.ts     # Message Dispatch Core
 │   └── index.ts          # Program Entry
-├── CLAUDE.md             # Claude Code Guide
-├── FEISHU_CONFIG.md      # Feishu Configuration Guide
-├── WEWORK_BOT.md      # WeCom Configuration Guide
+├── docs/                 # Documentation
+│   ├── CLAUDE.md         # Claude Code Guide
+│   ├── FEISHU_CONFIG.md  # Feishu Configuration Guide
+│   ├── WEWORK_BOT.md     # WeCom Configuration Guide
+│   └── README.zh-CN.md   # Chinese README
 └── package.json
 ```
 
@@ -401,7 +404,7 @@ The Dashboard Gateway provides a web-based interface for interacting with NeoCla
 
 ### Feishu Configuration
 
-For detailed instructions on configuring Feishu (Lark), see [FEISHU_CONFIG.md](FEISHU_CONFIG.md).
+For detailed instructions on configuring Feishu (Lark), see [FEISHU_CONFIG.md](docs/FEISHU_CONFIG.md).
 
 Key steps:
 
@@ -412,7 +415,7 @@ Key steps:
 
 ### WeCom Configuration
 
-For detailed instructions on configuring WeCom, see [WEWORK_BOT.md](WEWORK_BOT.md).
+For detailed instructions on configuring WeCom, see [WEWORK_BOT.md](docs/WEWORK_BOT.md).
 
 Key steps:
 
