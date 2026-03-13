@@ -16,6 +16,7 @@
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.59.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@opencode-ai/sdk": "^1.2.25",
     "ws": "^8.19.0"
   },
   "devDependencies": {

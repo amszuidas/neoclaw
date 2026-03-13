@@ -14,8 +14,8 @@ export const NEOCLAW_HOME = join(homedir(), '.neoclaw');
 // ── Config schema ─────────────────────────────────────────────
 
 export interface AgentConfig {
-  /** Which agent backend to use. Currently only "claude_code" is supported. */
-  type: string;
+  /** Which agent backend to use. Currently only "claude_code" and "opencode" are supported. */
+  type: 'claude_code' | 'opencode' | string;
   /** Model override (e.g. "claude-opus-4-5"). Defaults to claude CLI's default. */
   model?: string;
   /** Model used for session summarization. Default: ANTHROPIC_SMALL_FAST_MODEL or haiku. */
