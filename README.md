@@ -161,8 +161,41 @@ bun onboard
   "skillsDir": "~/.neoclaw/skills", // Skills directory
   "logLevel": "info",
   "workspacesDir": "~/.neoclaw/workspaces",
+  "fileBlacklist": [
+    // File access blacklist - prevents agent from reading/writing sensitive files
+    "~/.claude/**",           // Claude Code settings and data
+    "~/.config/claude/**",    // Alternative Claude config location
+    "/etc/shadow",            // System password file
+    "/etc/passwd",            // System user file
+    "**/.env",                // Environment variable files
+    "**/credentials.json",    // Credential files
+    "**/secrets/**",          // Secrets directories
+    "~/.neoclaw/config.json", // NeoClaw config file (protects blacklist itself)
+    "~/.neoclaw/config.json.backup", // Config backups
+  ],
 }
 ```
+
+#### File Blacklist
+
+The `fileBlacklist` configuration prevents the agent from accessing sensitive files and directories. It supports glob patterns:
+
+- `~` is expanded to the user's home directory
+- `**` matches any number of directories
+- `*` matches any characters except `/`
+- `?` matches any single character
+
+**Default blacklist includes:**
+- Claude Code configuration (`~/.claude/**`, `~/.config/claude/**`)
+- System files (`/etc/passwd`, `/etc/shadow`)
+- Environment files (`**/.env`)
+- Credentials (`**/credentials.json`)
+- Secrets (`**/secrets/**`)
+- NeoClaw configuration (`~/.neoclaw/config.json`) - **protects the blacklist itself**
+
+You can customize the blacklist via:
+- Configuration file: `fileBlacklist` array
+- Environment variable: `NEOCLAW_FILE_BLACKLIST` (comma-separated patterns)
 
 ### Start Service
 

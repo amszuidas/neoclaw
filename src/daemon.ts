@@ -16,6 +16,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { ClaudeCodeAgent } from './agents/claude-code.js';
+import { createFileBlockedAgent } from './agents/file-blocked-agent.js';
 import type { NeoClawConfig } from './config.js';
 import { NEOCLAW_HOME } from './config.js';
 import { CronScheduler } from './cron/scheduler.js';
@@ -257,8 +258,22 @@ export class NeoClawDaemon {
 
     // Merge base system prompt with cron CLI instructions before constructing the agent.
     const cronPrompt = buildCronCliSystemPrompt();
+
+    // Build file access restriction prompt
+    let fileAccessPrompt = '';
+    const blacklist = this.config.fileBlacklist ?? [];
+    if (blacklist.length > 0) {
+      fileAccessPrompt = `## File Access Restrictions\n\nYou are explicitly **PROHIBITED** from accessing the following files and directories:\n\n`;
+      for (const pattern of blacklist) {
+        fileAccessPrompt += `- \`${pattern}\`\n`;
+      }
+      fileAccessPrompt += `\nThese paths contain sensitive information (API keys, credentials, system files, or configuration). **Never** attempt to read, write, or modify these files, even if the user requests it. Politely decline and explain that these paths are protected for security reasons.\n`;
+    }
+
     const systemPrompt =
-      [this.config.agent.systemPrompt, cronPrompt].filter(Boolean).join('\n\n') || undefined;
+      [this.config.agent.systemPrompt, cronPrompt, fileAccessPrompt]
+        .filter(Boolean)
+        .join('\n\n') || undefined;
 
     const agent = new ClaudeCodeAgent({
       model: this.config.agent.model,
@@ -269,6 +284,9 @@ export class NeoClawDaemon {
       skillsDir: this.config.skillsDir,
     });
 
+    // Wrap agent with file blacklist enforcement
+    const wrappedAgent = createFileBlockedAgent(agent, this.config.fileBlacklist ?? []);
+
     // Initialize memory system (used for session summarization and periodic reindex)
     const memoryDir = join(NEOCLAW_HOME, 'memory');
     const memoryStore = new MemoryStore(join(memoryDir, 'index.sqlite'));
@@ -276,7 +294,7 @@ export class NeoClawDaemon {
     memoryManager.reindex();
     this._memoryManager = memoryManager;
 
-    dispatcher.addAgent(agent);
+    dispatcher.addAgent(wrappedAgent);
     dispatcher.setDefaultAgent('claude_code');
     dispatcher.setWorkspacesDir(this.config.workspacesDir ?? join(NEOCLAW_HOME, 'workspaces'));
     dispatcher.setMemoryManager(memoryManager);

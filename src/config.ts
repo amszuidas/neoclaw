@@ -86,6 +86,8 @@ export interface NeoClawConfig {
   skillsDir?: string;
   /** Minimum log level to output. Default: "info". */
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
+  /** File path blacklist - agents will be prevented from reading/writing these paths. Supports glob patterns. */
+  fileBlacklist?: string[];
 }
 
 // ── Defaults ──────────────────────────────────────────────────
@@ -151,6 +153,17 @@ export const DEFAULTS: NeoClawConfig = {
   skillsDir: join(NEOCLAW_HOME, 'skills'),
   workspacesDir: join(NEOCLAW_HOME, 'workspaces'),
   logLevel: 'info',
+  fileBlacklist: [
+    '~/.claude/**',
+    '~/.config/claude/**',
+    '/etc/shadow',
+    '/etc/passwd',
+    '**/.env',
+    '**/credentials.json',
+    '**/secrets/**',
+    '~/.neoclaw/config.json', // NeoClaw config file (protects blacklist itself)
+    '~/.neoclaw/config.json.backup', // Config backups
+  ],
 };
 
 // ── Loader ────────────────────────────────────────────────────
@@ -225,5 +238,6 @@ export function loadConfig(): NeoClawConfig {
     ),
     skillsDir: str('NEOCLAW_SKILLS_DIR', file.skillsDir, join(NEOCLAW_HOME, 'skills')),
     logLevel: str('NEOCLAW_LOG_LEVEL', file.logLevel, 'info') as NeoClawConfig['logLevel'],
+    fileBlacklist: arr('NEOCLAW_FILE_BLACKLIST', file.fileBlacklist, DEFAULTS.fileBlacklist!),
   };
 }
