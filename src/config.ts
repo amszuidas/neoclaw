@@ -31,6 +31,19 @@ export interface AgentConfig {
   timeoutSecs?: number;
   /** Max seconds to wait for session summarization Claude CLI call. Default: 300. */
   summaryTimeoutSecs?: number;
+  /**
+   * OpenCode specific options.
+   */
+  opencode?: {
+    model?: {
+      providerID: string;
+      modelID: string;
+    };
+    summaryModel?: {
+      providerID: string;
+      modelID: string;
+    };
+  };
 }
 
 export interface FeishuConfig {

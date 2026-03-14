@@ -1,16 +1,35 @@
 import { createOpencode, type OpencodeClient } from '@opencode-ai/sdk';
 import { join } from 'node:path';
-import { existsSync, mkdirSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readlinkSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir } from 'node:os';
 import { logger } from '../utils/logger.js';
+import type { McpServerConfig } from '../config.js';
+import { loadConfig } from '../config.js';
 import type { Agent, AgentStreamEvent, RunRequest, RunResponse } from './types.js';
 
 const log = logger('opencode');
 
 type OpencodeAgentOptions = {
-  model?: string;
+  model?: {
+    providerID: string;
+    modelID: string;
+  };
   systemPrompt?: string;
   /** Workspaces directory path */
   cwd?: string | null;
+  /** MCP servers to expose to the agent (fallback if config file is unavailable) */
+  mcpServers?: Record<string, McpServerConfig>;
+  /** Directory containing skill subdirectories (each with a SKILL.md) */
+  skillsDir?: string;
 };
 
 export class OpencodeAgent implements Agent {
@@ -49,7 +68,7 @@ export class OpencodeAgent implements Agent {
       path: { id: sessionId },
       body: {
         parts: [{ type: 'text', text: request.text }],
-        model: this._parseModel(this._options.model),
+        model: this._options.model,
         system: this._options.systemPrompt,
       },
       query: {
@@ -66,6 +85,7 @@ export class OpencodeAgent implements Agent {
     let costUsd: number | null = null;
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
+    let model: string | null = null;
 
     for await (const event of events.stream) {
       switch (event.type) {
@@ -97,6 +117,7 @@ export class OpencodeAgent implements Agent {
             costUsd = msg.cost;
             inputTokens = msg.tokens.input;
             outputTokens = msg.tokens.output;
+            model = msg.modelID;
           }
           break;
         }
@@ -112,7 +133,7 @@ export class OpencodeAgent implements Agent {
                 inputTokens,
                 outputTokens,
                 elapsedMs: Date.now() - t0,
-                model: this._options.model ?? null,
+                model,
               },
             };
           }
@@ -201,28 +222,127 @@ export class OpencodeAgent implements Agent {
     const dirName = conversationId.replace(/:/g, '_');
     const conversationDir = join(this._options.cwd, dirName);
 
-    // Create directory if it doesn't exist
-    if (!existsSync(conversationDir)) {
-      mkdirSync(conversationDir, { recursive: true });
-      // TODO: Prepare config files for opencode mcp and skills
-    }
+    mkdirSync(conversationDir, { recursive: true });
+    this._prepareWorkspace(conversationDir);
 
     return conversationDir;
   }
 
-  /**
-   * Parses a model string into the { providerID, modelID } format required by OpenCode.
-   * Only "providerID/modelID" format is supported (e.g. "anthropic/claude-sonnet-4-6").
-   * Throws if the string does not contain '/'.
-   */
-  private _parseModel(model?: string): { providerID: string; modelID: string } | undefined {
-    if (!model) return undefined;
-    const slash = model.indexOf('/');
-    if (slash === -1) {
-      throw new Error(
-        `Invalid model format: "${model}". Expected "providerID/modelID" (e.g. "anthropic/claude-sonnet-4-6")`
-      );
+  private _prepareWorkspace(cwd: string): void {
+    this._syncMcpServers(cwd);
+    this._syncSkills(cwd);
+  }
+
+  /** Sync skill symlinks into .opencode/skills/: create new, update changed, remove stale. */
+  private _syncSkills(cwd: string): void {
+    const skillsDir = this._options.skillsDir;
+    if (!skillsDir || !existsSync(skillsDir)) return;
+
+    const destSkillsDir = join(cwd, '.opencode', 'skills');
+    mkdirSync(destSkillsDir, { recursive: true });
+
+    let srcEntries: string[];
+    try {
+      srcEntries = readdirSync(skillsDir);
+    } catch {
+      return;
     }
-    return { providerID: model.slice(0, slash), modelID: model.slice(slash + 1) };
+
+    const validSkills = new Set<string>();
+    for (const name of srcEntries) {
+      const srcSkill = join(skillsDir, name);
+      try {
+        if (!lstatSync(srcSkill).isDirectory()) continue;
+        if (!existsSync(join(srcSkill, 'SKILL.md'))) continue;
+      } catch {
+        continue;
+      }
+      validSkills.add(name);
+
+      const destLink = join(destSkillsDir, name);
+      try {
+        if (lstatSync(destLink).isSymbolicLink()) {
+          if (readlinkSync(destLink) === srcSkill) continue; // already correct
+          unlinkSync(destLink); // target changed, re-create
+        } else {
+          continue; // real dir/file exists, don't overwrite
+        }
+      } catch {
+        // destLink doesn't exist — will create below
+      }
+
+      try {
+        symlinkSync(srcSkill, destLink);
+        log.info(`Linked skill "${name}" → ${destLink}`);
+      } catch (err) {
+        log.warn(`Failed to symlink skill "${name}": ${err}`);
+      }
+    }
+
+    // Remove stale symlinks that no longer correspond to a valid skill
+    let destEntries: string[];
+    try {
+      destEntries = readdirSync(destSkillsDir);
+    } catch {
+      return;
+    }
+    for (const name of destEntries) {
+      if (validSkills.has(name)) continue;
+      const destLink = join(destSkillsDir, name);
+      try {
+        if (!lstatSync(destLink).isSymbolicLink()) continue;
+        unlinkSync(destLink);
+        log.info(`Removed stale skill symlink "${name}" from ${destSkillsDir}`);
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+  }
+
+  private _syncMcpServers(cwd: string): void {
+    let mcpServers: Record<string, McpServerConfig> | undefined;
+    try {
+      const freshConfig = loadConfig();
+      mcpServers = freshConfig.mcpServers;
+    } catch {
+      mcpServers = this._options.mcpServers;
+    }
+
+    // Inject built-in memory MCP server
+    const memoryDir = join(homedir(), '.neoclaw', 'memory');
+    const mcpServerScript = join(import.meta.dir, '..', 'memory', 'mcp-server.ts');
+    const allServers: Record<string, McpServerConfig> = {
+      ...mcpServers,
+      'neoclaw-memory': {
+        type: 'stdio',
+        command: 'bun',
+        args: ['run', mcpServerScript],
+        env: { NEOCLAW_MEMORY_DIR: memoryDir },
+      },
+    };
+
+    // Convert McpServerConfig to opencode's mcp format:
+    // - "stdio" → type "local", command array = [command, ...args], environment = env
+    // - "http"/"sse" → type "remote", url, headers
+    const mcp: Record<string, unknown> = {};
+    for (const [name, cfg] of Object.entries(allServers)) {
+      if (cfg.type === 'stdio') {
+        mcp[name] = {
+          type: 'local',
+          command: [cfg.command!, ...(cfg.args ?? [])],
+          ...(cfg.env ? { environment: cfg.env } : {}),
+        };
+      } else {
+        mcp[name] = {
+          type: 'remote',
+          url: cfg.url!,
+          ...(cfg.headers ? { headers: cfg.headers } : {}),
+        };
+      }
+    }
+
+    const configPath = join(cwd, 'opencode.json');
+    writeFileSync(configPath, JSON.stringify({ mcp }, null, 2));
+    log.info(`Wrote opencode.json to ${cwd}`);
   }
 }

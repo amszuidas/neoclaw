@@ -292,9 +292,10 @@ export class NeoClawDaemon {
         skillsDir: this.config.skillsDir,
       }),
       new OpencodeAgent({
-        model: this.config.agent.model,
+        model: this.config.agent.opencode?.model,
         systemPrompt,
         cwd: this.config.workspacesDir,
+        skillsDir: this.config.skillsDir,
       }),
     ];
 
@@ -311,7 +312,7 @@ export class NeoClawDaemon {
     this._memoryManager = memoryManager;
 
     agentsWithWrapped.forEach((agent) => dispatcher.addAgent(agent));
-    dispatcher.setDefaultAgent('claude_code');
+    dispatcher.setDefaultAgent(agentType);
     dispatcher.setWorkspacesDir(this.config.workspacesDir ?? join(NEOCLAW_HOME, 'workspaces'));
     dispatcher.setMemoryManager(memoryManager);
 
