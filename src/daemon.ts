@@ -271,9 +271,8 @@ export class NeoClawDaemon {
     }
 
     const systemPrompt =
-      [this.config.agent.systemPrompt, cronPrompt, fileAccessPrompt]
-        .filter(Boolean)
-        .join('\n\n') || undefined;
+      [this.config.agent.systemPrompt, cronPrompt, fileAccessPrompt].filter(Boolean).join('\n\n') ||
+      undefined;
 
     const agent = new ClaudeCodeAgent({
       model: this.config.agent.model,
@@ -344,7 +343,9 @@ export class NeoClawDaemon {
     const hasDashboard = this.config.dashboard?.enabled;
 
     if (!hasFeishu && !hasWework && !hasDashboard) {
-      log.error('No gateway configured — at least one of Feishu, Wework, or Dashboard gateway must be configured');
+      log.error(
+        'No gateway configured — at least one of Feishu, Wework, or Dashboard gateway must be configured'
+      );
       throw new Error(
         'No gateway configured — at least one of Feishu, Wework, or Dashboard gateway must be configured'
       );

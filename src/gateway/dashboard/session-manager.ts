@@ -49,9 +49,7 @@ export class SessionManager {
    * List all sessions sorted by update time (newest first)
    */
   listAll(): Session[] {
-    return Array.from(this._sessions.values()).sort(
-      (a, b) => b.updatedAt - a.updatedAt
-    );
+    return Array.from(this._sessions.values()).sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
   /**

@@ -23,10 +23,10 @@ export interface ServerMessage {
 }
 
 export type ServerMessageData =
-  | RunResponse              // For 'response' type
-  | AgentStreamEvent         // For 'stream_delta' type
-  | Record<string, never>    // For 'stream_start', 'stream_end' (empty object)
-  | { message: string }      // For 'error' type
+  | RunResponse // For 'response' type
+  | AgentStreamEvent // For 'stream_delta' type
+  | Record<string, never> // For 'stream_start', 'stream_end' (empty object)
+  | { message: string } // For 'error' type
   | { sessions: Session[] }; // For 'sessions_update' type
 
 /**

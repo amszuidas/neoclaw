@@ -5,11 +5,11 @@
  * via WebSocket connections. Supports streaming responses.
  */
 
+import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { Server as HttpServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
-import { Server as HttpServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import type { AgentStreamEvent, RunResponse } from '../../agents/types.js';
 import type { DashboardConfig } from '../../config.js';
@@ -105,12 +105,15 @@ export class DashboardGateway implements Gateway {
     // Proactively send a message to a chat (e.g. restart notifications)
     // Find the WebSocket client for this chatId and send the message
     const ws = this._clients.get(chatId);
-    if (ws && ws.readyState === 1) { // OPEN
-      ws.send(JSON.stringify({
-        type: 'response',
-        sessionId: chatId,
-        data: response,
-      }));
+    if (ws && ws.readyState === 1) {
+      // OPEN
+      ws.send(
+        JSON.stringify({
+          type: 'response',
+          sessionId: chatId,
+          data: response,
+        })
+      );
     }
   }
 
@@ -125,7 +128,9 @@ export class DashboardGateway implements Gateway {
   ): Promise<void> {
     if (!this._handler) return;
 
-    log.info(`[handleMessage] Processing message for session: ${sessionId}, text: "${text.slice(0, 50)}..."`);
+    log.info(
+      `[handleMessage] Processing message for session: ${sessionId}, text: "${text.slice(0, 50)}..."`
+    );
 
     // Update or create session
     this._sessionManager.createOrUpdate(sessionId, text);
@@ -139,7 +144,9 @@ export class DashboardGateway implements Gateway {
       attachments: [],
     };
 
-    log.debug(`[handleMessage] Created InboundMessage with chatId: ${msg.chatId}, conversationKey will be: ${msg.chatId}`);
+    log.debug(
+      `[handleMessage] Created InboundMessage with chatId: ${msg.chatId}, conversationKey will be: ${msg.chatId}`
+    );
 
     const reply: ReplyFn = async (response) => {
       replyFn(response);
@@ -179,8 +186,15 @@ export class DashboardGateway implements Gateway {
   /**
    * Handle session change (when user switches sessions in the UI)
    */
-  private _handleSessionChange(oldSessionId: string | null, newSessionId: string, ws: any, connectionId: string): void {
-    log.info(`[onSessionChange] Session change (conn_${connectionId}): ${oldSessionId} -> ${newSessionId}`);
+  private _handleSessionChange(
+    oldSessionId: string | null,
+    newSessionId: string,
+    ws: any,
+    connectionId: string
+  ): void {
+    log.info(
+      `[onSessionChange] Session change (conn_${connectionId}): ${oldSessionId} -> ${newSessionId}`
+    );
 
     // Remove old session mapping
     if (oldSessionId) {
@@ -231,9 +245,10 @@ export class DashboardGateway implements Gateway {
       log.info('Starting frontend dev server...');
 
       // Try npm first, fallback to bun
-      const command = process.env.BUN_INSTALL?.endsWith('bun') || existsSync(join(WEB_DIR, 'package.json'))
-        ? 'npm'
-        : 'bun';
+      const command =
+        process.env.BUN_INSTALL?.endsWith('bun') || existsSync(join(WEB_DIR, 'package.json'))
+          ? 'npm'
+          : 'bun';
 
       const args = command === 'npm' ? ['run', 'dev'] : ['run', 'dev'];
 

@@ -4,9 +4,8 @@
  * Provides an HTTP server with WebSocket support for the dashboard gateway.
  */
 
-import { Server as HttpServer } from 'node:http';
-import { createServer as createHttpServer } from 'node:http';
-import { WebSocketServer, WebSocket } from 'ws';
+import { createServer as createHttpServer, Server as HttpServer } from 'node:http';
+import { WebSocket, WebSocketServer } from 'ws';
 import type { AgentStreamEvent, RunResponse } from '../../agents/types.js';
 import { logger } from '../../utils/logger.js';
 import type { MessageHandlers, ServerMessage } from './types.js';
@@ -23,7 +22,12 @@ export interface ServerConfig {
   /** Called when a new WebSocket connects, allows gateway to register the connection */
   onConnect?: (sessionId: string, ws: WebSocket, connectionId: string) => void;
   /** Called to update the session ID for an existing connection */
-  onSessionChange?: (oldSessionId: string | null, newSessionId: string, ws: WebSocket, connectionId: string) => void;
+  onSessionChange?: (
+    oldSessionId: string | null,
+    newSessionId: string,
+    ws: WebSocket,
+    connectionId: string
+  ) => void;
 }
 
 export interface DashboardServer {
@@ -34,10 +38,7 @@ export interface DashboardServer {
 /**
  * Create HTTP and WebSocket servers
  */
-export async function createServer(
-  port: number,
-  config: ServerConfig
-): Promise<DashboardServer> {
+export async function createServer(port: number, config: ServerConfig): Promise<DashboardServer> {
   const httpServer = createHttpServer((req, res) => {
     // Set CORS headers
     if (config.cors !== false) {
@@ -70,7 +71,7 @@ export async function createServer(
   wsServer.on('connection', (ws: WebSocket) => {
     // Track WebSocket connection - each message can have a different sessionId
     let currentSessionId: string | null = null;
-    let wsClientId = Math.random().toString(36).slice(2);
+    const wsClientId = Math.random().toString(36).slice(2);
     log.info(`WebSocket client connected (ws_${wsClientId})`);
 
     ws.on('message', async (data: Buffer) => {
@@ -99,7 +100,9 @@ export async function createServer(
         } else if (message.type === 'message') {
           const newSessionId = message.sessionId;
 
-          log.debug(`Received message for session: ${newSessionId}, previous session: ${currentSessionId}, connection: ws_${wsClientId}`);
+          log.debug(
+            `Received message for session: ${newSessionId}, previous session: ${currentSessionId}, connection: ws_${wsClientId}`
+          );
 
           // Always call onConnect/update to ensure the WebSocket is registered for this session
           // This handles both new connections and session switches

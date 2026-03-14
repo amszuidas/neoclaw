@@ -6,7 +6,10 @@ import { homedir } from 'node:os';
 import { resolve, sep } from 'node:path';
 
 export class FileAccessDenied extends Error {
-  constructor(public readonly filePath: string, public readonly reason: string) {
+  constructor(
+    public readonly filePath: string,
+    public readonly reason: string
+  ) {
     super(`Access denied to ${filePath}: ${reason}`);
     this.name = 'FileAccessDenied';
   }
@@ -60,10 +63,7 @@ function matchesPattern(filePath: string, pattern: string): boolean {
  * Check if a file path matches any pattern in the blacklist.
  * Supports glob patterns and ~ expansion.
  */
-export async function checkFileAccess(
-  filePath: string,
-  blacklist: string[]
-): Promise<void> {
+export async function checkFileAccess(filePath: string, blacklist: string[]): Promise<void> {
   if (!blacklist || blacklist.length === 0) {
     return;
   }
@@ -81,27 +81,18 @@ export async function checkFileAccess(
 
       // Check exact match
       if (resolvedPath === resolvedPattern) {
-        throw new FileAccessDenied(
-          filePath,
-          `Path matches blacklist pattern: ${pattern}`
-        );
+        throw new FileAccessDenied(filePath, `Path matches blacklist pattern: ${pattern}`);
       }
 
       // Check if the file is within a blacklisted directory
       // Ensure the pattern ends with a separator to avoid partial matches
       if (resolvedPath.startsWith(resolvedPattern + '/')) {
-        throw new FileAccessDenied(
-          filePath,
-          `Path is within blacklisted directory: ${pattern}`
-        );
+        throw new FileAccessDenied(filePath, `Path is within blacklisted directory: ${pattern}`);
       }
     } else {
       // Handle glob patterns
       if (matchesPattern(filePath, pattern)) {
-        throw new FileAccessDenied(
-          filePath,
-          `Path matches blacklist pattern: ${pattern}`
-        );
+        throw new FileAccessDenied(filePath, `Path matches blacklist pattern: ${pattern}`);
       }
     }
   }

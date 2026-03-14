@@ -6,9 +6,9 @@
  * on files outside the workspace directory.
  */
 
-import type { Agent, AgentStreamEvent, RunRequest, RunResponse } from './types.js';
 import { checkFileAccess, FileAccessDenied, isPathInWorkspace } from '../utils/file-guard.js';
 import { logger } from '../utils/logger.js';
+import type { Agent, AgentStreamEvent, RunRequest, RunResponse } from './types.js';
 
 const log = logger('file-blocked-agent');
 
@@ -67,7 +67,9 @@ function checkGroupChatWriteRestrictions(
   log.info(`Extracted ${paths.length} paths from write command: ${JSON.stringify(paths)}`);
 
   if (paths.length === 0) {
-    log.warn(`No paths extracted from write command, blocking for safety: ${bashCommand.substring(0, 100)}`);
+    log.warn(
+      `No paths extracted from write command, blocking for safety: ${bashCommand.substring(0, 100)}`
+    );
     // Cannot safely validate the command, so block it
     throw new FileAccessDenied(
       bashCommand.substring(0, 50),
@@ -89,7 +91,11 @@ function checkGroupChatWriteRestrictions(
 /**
  * Extract file paths from tool use events.
  */
-function extractFilePathsFromToolUse(event: { type: 'tool_use'; name: string; input: unknown }): string[] {
+function extractFilePathsFromToolUse(event: {
+  type: 'tool_use';
+  name: string;
+  input: unknown;
+}): string[] {
   const paths: string[] = [];
   const { name, input } = event;
 
@@ -166,7 +172,7 @@ function extractFilePathsFromBash(command: string): string[] {
       if (path && path.length > 0 && !path.startsWith('-')) {
         // Basic variable expansion for common environment variables
         const expandedPath = path
-          .replace(/\$HOME|\~/g, process.env.HOME || '')
+          .replace(/\$HOME|~/g, process.env.HOME || '')
           .replace(/\$PWD/g, process.cwd())
           .replace(/\$USER/g, process.env.USER || '');
 
@@ -313,7 +319,11 @@ export function createFileBlockedAgent(
             }
 
             // Check group chat write restrictions for Write/Edit tools
-            if (chatType === 'group' && (event.name === 'Write' || event.name === 'Edit' || event.name === 'NotebookEdit') && workspaceDir) {
+            if (
+              chatType === 'group' &&
+              (event.name === 'Write' || event.name === 'Edit' || event.name === 'NotebookEdit') &&
+              workspaceDir
+            ) {
               const filePath = (event.input as { file_path: string }).file_path;
               if (typeof filePath === 'string' && !isPathInWorkspace(filePath, workspaceDir)) {
                 log.warn(`Blocking ${event.name} operation on file outside workspace: ${filePath}`);
