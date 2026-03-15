@@ -1,11 +1,24 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
-*.log
+*.bun-build
+
+# Environment variables
 .env
 .env.*
 !.env.example
+
+# Logs
+*.log
+
+# OS files
 .DS_Store
-*.bun-build
+
+# TypeScript
+*.tsbuildinfo
+
+# Test artifacts
 src/web/test-results/
 src/web/playwright-report/
-src/web/tsconfig.tsbuildinfo

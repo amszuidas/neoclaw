@@ -10,17 +10,6 @@
         "NEOCLAW_DAEMON": "1"
       },
       "runtimeArgs": ["run"]
-    },
-    {
-      "type": "bun",
-      "request": "launch",
-      "name": "Debug: Start onboard",
-      "program": "${workspaceFolder}/src/index.ts",
-      "args": ["onboard"],
-      "env": {
-        "NEOCLAW_DAEMON": "1"
-      },
-      "runtimeArgs": ["run"]
     }
   ]
 }
