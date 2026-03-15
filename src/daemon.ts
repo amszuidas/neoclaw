@@ -16,7 +16,9 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { ClaudeCodeAgent } from './agents/claude-code.js';
+import { OpencodeAgent } from './agents/opencode.js';
 import { createFileBlockedAgent } from './agents/file-blocked-agent.js';
+import { BUILDIN_AGENTS } from './agents/constants.js';
 import type { NeoClawConfig } from './config.js';
 import { NEOCLAW_HOME } from './config.js';
 import { CronScheduler } from './cron/scheduler.js';
@@ -252,10 +254,12 @@ export class NeoClawDaemon {
 
     // Build and register the agent
     const agentType = this.config.agent.type;
-    if (agentType !== 'claude_code') {
-      log.error(`Unknown agent type: "${agentType}". Currently only "claude_code" is supported.`);
+    if (!BUILDIN_AGENTS.includes(agentType)) {
+      log.error(
+        `Unsupported agent type in config: "${agentType}". Supported types: ${BUILDIN_AGENTS.join(', ')}`
+      );
       throw new Error(
-        `Unknown agent type: "${agentType}". Currently only "claude_code" is supported.`
+        `Unsupported agent type in config: "${agentType}". Supported types: ${BUILDIN_AGENTS.join(', ')}`
       );
     }
 
@@ -277,20 +281,27 @@ export class NeoClawDaemon {
       [this.config.agent.systemPrompt, cronPrompt, fileAccessPrompt].filter(Boolean).join('\n\n') ||
       undefined;
 
-    const agent = new ClaudeCodeAgent({
-      model: this.config.agent.model,
-      allowedTools: this.config.agent.allowedTools,
-      systemPrompt,
-      cwd: this.config.workspacesDir,
-      mcpServers: this.config.mcpServers,
-      skillsDir: this.config.skillsDir,
-    });
+    // Supported agents
+    const agents = [
+      new ClaudeCodeAgent({
+        model: this.config.agent.model,
+        allowedTools: this.config.agent.allowedTools,
+        systemPrompt,
+        cwd: this.config.workspacesDir,
+        mcpServers: this.config.mcpServers,
+        skillsDir: this.config.skillsDir,
+      }),
+      new OpencodeAgent({
+        model: this.config.agent.opencode?.model,
+        systemPrompt,
+        cwd: this.config.workspacesDir,
+        skillsDir: this.config.skillsDir,
+      }),
+    ];
 
     // Wrap agent with file blacklist enforcement
-    const wrappedAgent = createFileBlockedAgent(
-      agent,
-      this.config.fileBlacklist ?? [],
-      this.config.workspacesDir
+    const agentsWithWrapped = agents.map((agent) =>
+      createFileBlockedAgent(agent, blacklist, this.config.workspacesDir)
     );
 
     // Initialize memory system (used for session summarization and periodic reindex)
@@ -300,8 +311,8 @@ export class NeoClawDaemon {
     memoryManager.reindex();
     this._memoryManager = memoryManager;
 
-    dispatcher.addAgent(wrappedAgent);
-    dispatcher.setDefaultAgent('claude_code');
+    agentsWithWrapped.forEach((agent) => dispatcher.addAgent(agent));
+    dispatcher.setDefaultAgent(agentType);
     dispatcher.setWorkspacesDir(this.config.workspacesDir ?? join(NEOCLAW_HOME, 'workspaces'));
     dispatcher.setMemoryManager(memoryManager);
 
