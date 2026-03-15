@@ -6,3 +6,6 @@ dist/
 !.env.example
 .DS_Store
 *.bun-build
+src/web/test-results/
+src/web/playwright-report/
+src/web/tsconfig.tsbuildinfo

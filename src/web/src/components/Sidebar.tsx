@@ -26,7 +26,11 @@ interface SidebarProps {
   sessions: Session[];
   currentSessionId: string | null;
   onSelectSession: (id: string) => void;
+  onSelectNavigation: (moduleKey: ModuleKey, itemKey: string, label: string) => void;
+  activeNavigationKey: string | null;
   connectionStatus: ConnectionStatus;
+  className?: string;
+  onRequestClose?: () => void;
 }
 
 type ModuleKey = 'chat' | 'control' | 'agent' | 'settings';
@@ -93,7 +97,11 @@ export function Sidebar({
   sessions,
   currentSessionId,
   onSelectSession,
+  onSelectNavigation,
+  activeNavigationKey,
   connectionStatus,
+  className,
+  onRequestClose,
 }: SidebarProps) {
   const [expandedModules, setExpandedModules] = useState<Set<ModuleKey>>(
     new Set(['chat', 'control', 'agent', 'settings'])
@@ -115,7 +123,10 @@ export function Sidebar({
   const isModuleExpanded = (moduleKey: ModuleKey) => expandedModules.has(moduleKey);
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+    <div
+      data-testid="dashboard-sidebar"
+      className={`w-64 bg-white border-r border-gray-200 flex flex-col ${className ?? ''}`}
+    >
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-2">
@@ -175,6 +186,7 @@ export function Sidebar({
                           onClick={() => {
                             onSelectSession(session.id);
                             setActiveModule('chat');
+                            onRequestClose?.();
                           }}
                         >
                           <MessageSquare className="w-4 h-4 flex-shrink-0" />
@@ -186,12 +198,25 @@ export function Sidebar({
                     // Navigation items
                     module.items.map((item) => {
                       const ItemIcon = item.icon;
+                      const navKey = `${module.key}:${item.key}`;
+                      const isNavActive = activeNavigationKey === navKey;
                       return (
                         <div
                           key={item.key}
-                          className="flex items-center gap-2 px-6 py-2 cursor-pointer hover:bg-gray-100 transition-colors text-gray-700"
+                          className={`flex items-center gap-2 px-6 py-2 cursor-pointer transition-colors ${
+                            isNavActive
+                              ? 'bg-pink-50 text-red-600'
+                              : 'hover:bg-gray-100 text-gray-700'
+                          }`}
+                          onClick={() => {
+                            setActiveModule(module.key);
+                            onSelectNavigation(module.key, item.key, item.label);
+                            onRequestClose?.();
+                          }}
                         >
-                          <ItemIcon className="w-4 h-4 text-gray-500" />
+                          <ItemIcon
+                            className={`w-4 h-4 ${isNavActive ? 'text-red-500' : 'text-gray-500'}`}
+                          />
                           <span className="text-sm">{item.label}</span>
                         </div>
                       );

@@ -3,6 +3,7 @@
  */
 
 import { useRef, useEffect } from 'react';
+import { Menu } from 'lucide-react';
 import { MessageList } from './MessageList';
 import { InputBox } from './InputBox';
 import type { Message } from '../types';
@@ -12,9 +13,16 @@ interface ChatAreaProps {
   messages: Message[];
   onSendMessage: (text: string) => void;
   isConnected: boolean;
+  onOpenMenu?: () => void;
 }
 
-export function ChatArea({ sessionId, messages, onSendMessage, isConnected }: ChatAreaProps) {
+export function ChatArea({
+  sessionId,
+  messages,
+  onSendMessage,
+  isConnected,
+  onOpenMenu,
+}: ChatAreaProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
@@ -37,7 +45,18 @@ export function ChatArea({ sessionId, messages, onSendMessage, isConnected }: Ch
     <div className="flex-1 flex flex-col bg-gray-900">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-        <h1 className="text-lg font-semibold text-gray-100">NeoClaw</h1>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-label="打开菜单"
+            data-testid="mobile-menu-button"
+            className="md:hidden p-2 rounded-lg border border-gray-700 text-gray-200 hover:bg-gray-800"
+            onClick={onOpenMenu}
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <h1 className="text-lg font-semibold text-gray-100">NeoClaw</h1>
+        </div>
         <div className="flex items-center gap-2">
           <div
             className={`w-2 h-2 rounded-full ${
