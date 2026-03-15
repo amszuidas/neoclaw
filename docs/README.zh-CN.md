@@ -7,7 +7,7 @@
   </p>
   <p>
     NeoClaw 是一个基于 Gateway 架构设计的可扩展 AI 超级助手。<br/>
-    目前支持将 <strong>飞书</strong> 和 <strong>企业微信</strong> 作为消息网关，<strong>Claude Code</strong> 作为强大的 AI 后端。
+    目前支持将 <strong>飞书</strong> 和 <strong>企业微信</strong> 作为消息网关，<strong>Claude Code</strong> 和 <strong>Opencode</strong> 作为 AI 后端。
   </p>
   <p>
     <strong>中文</strong> | <a href="../README.md">English</a>
@@ -38,7 +38,9 @@
 
 ## ✨ 功能特性
 
-- **完整 Claude Code 支持**: 由世界上最强大的 Agent 驱动，完美支持 Claude Code 的一切能力（包括 Plugins、Skills、MCPs 等），提供最强大的 AI 协作体验。
+- **多 AI 后端支持**: 可选 **Claude Code** 或 **Opencode** 作为 AI 后端，两者均支持 MCP Servers、Skills、流式响应和工具调用。
+  - **Claude Code** (`claude_code`): 通过长驻子进程与 Claude Code CLI 通信（JSONL 流式协议）。支持会话持久化、图片附件、AskUserQuestion 交互式表单。
+  - **Opencode** (`opencode`): 通过 SDK 与 [Opencode](https://opencode.ai) 本地服务通信。支持多提供商模型和推理输出（reasoning）。
 
 - **多平台支持**: 目前支持飞书、企业微信和 Gateway Dashboard。
   - **飞书**: 完美适配私聊、群聊、话题群等多种场景。
@@ -85,21 +87,23 @@
 ### 前置要求
 
 - [Bun](https://bun.sh) (v1.0+)
-- **Claude Code**: 请参考 [Claude Code 安装说明](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) 进行安装和配置。
-  > **注意**: 如果你不想订阅 Claude Code，可以通过配置 `~/.claude/settings.json` 来使用自定义 API：
-  >
-  > ```json
-  > {
-  >   "env": {
-  >     "ANTHROPIC_BASE_URL": "xxx",
-  >     "ANTHROPIC_AUTH_TOKEN": "xxx",
-  >     "ANTHROPIC_MODEL": "xxx",
-  >     "ANTHROPIC_SMALL_FAST_MODEL": "xxx",
-  >     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-  >     "API_TIMEOUT_MS": "600000"
-  >   }
-  > }
-  > ```
+- **AI 后端**（选择其一或同时安装）：
+  - **Claude Code**（默认）：请参考 [Claude Code 安装说明](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) 进行安装和配置。
+    > **注意**: 如果你不想订阅 Claude Code，可以通过配置 `~/.claude/settings.json` 来使用自定义 API：
+    >
+    > ```json
+    > {
+    >   "env": {
+    >     "ANTHROPIC_BASE_URL": "xxx",
+    >     "ANTHROPIC_AUTH_TOKEN": "xxx",
+    >     "ANTHROPIC_MODEL": "xxx",
+    >     "ANTHROPIC_SMALL_FAST_MODEL": "xxx",
+    >     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    >     "API_TIMEOUT_MS": "600000"
+    >   }
+    > }
+    > ```
+  - **Opencode**：安装 [Opencode CLI](https://opencode.ai) 并配置你偏好的 AI 提供商。
 - 飞书开放平台账号及应用（需配置相应的权限和事件订阅），详细配置请参考 [飞书机器人配置指南](FEISHU_CONFIG.md)。
 - 关于配置企业微信智能助手的详细说明，请参阅 [企业微信机器人配置指南](WEWORK_BOT.md)。
 
@@ -128,11 +132,19 @@ bun onboard
 ```jsonc
 {
   "agent": {
+    // AI 后端："claude_code"（默认）或 "opencode"
     "type": "claude_code",
     "model": "claude-sonnet-4-6", // 自定义 Claude 模型
     "systemPrompt": "", // 自定义系统提示词
     "allowedTools": [], // 允许的工具列表
     "timeoutSecs": 600, // 超时时间（秒）
+    // Opencode 专属选项（仅 type 为 "opencode" 时生效）
+    "opencode": {
+      "model": {
+        "providerID": "anthropic", // 提供商 ID（如 "anthropic"、"openai"）
+        "modelID": "claude-sonnet-4-5", // 该提供商支持的模型 ID
+      },
+    },
   },
   "feishu": {
     "appId": "your_app_id", // 飞书应用 App ID（使用企业微信时可选）
