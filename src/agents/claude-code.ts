@@ -8,21 +8,10 @@
  */
 
 import type { FileSink, Subprocess } from 'bun';
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  readlinkSync,
-  symlinkSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import type { McpServerConfig } from '../config.js';
-import { loadConfig } from '../config.js';
 import { createDebouncedFlush } from '../utils/debounced-flush.js';
 import { logger } from '../utils/logger.js';
 import { Mutex } from '../utils/mutex.js';
@@ -35,6 +24,7 @@ import type {
   RunRequest,
   RunResponse,
 } from './types.js';
+import { WorkspaceManager } from './workspace-manager.js';
 
 const log = logger('claude-code');
 
@@ -484,6 +474,8 @@ export class ClaudeCodeAgent implements Agent {
     }
   }, 2000);
 
+  private readonly _workspace: WorkspaceManager;
+
   constructor(
     private readonly opts: {
       model?: string | null;
@@ -494,6 +486,21 @@ export class ClaudeCodeAgent implements Agent {
       skillsDir?: string | null;
     } = {}
   ) {
+    this._workspace = new WorkspaceManager(
+      {
+        workspacesDir: this.opts.cwd,
+        mcpServers: this.opts.mcpServers,
+        skillsDir: this.opts.skillsDir,
+      },
+      {
+        writeMcpConfig: (cwd, servers) => {
+          const mcpPath = join(cwd, '.mcp.json');
+          writeFileSync(mcpPath, JSON.stringify({ mcpServers: servers }, null, 2));
+        },
+        agentSkillsDir: '.claude/skills',
+      }
+    );
+
     this._loadSessions();
   }
 
@@ -522,8 +529,6 @@ export class ClaudeCodeAgent implements Agent {
     const textParts: string[] = [];
     const thinkingParts: string[] = [];
     let resultEvt: ResultEvent | null = null;
-    let rawText = '';
-    let streamedCleanText = '';
 
     const proc = await this._getOrCreate(request);
 
@@ -552,7 +557,7 @@ export class ClaudeCodeAgent implements Agent {
       this._flushSessions();
     }
 
-    const baseText = resultEvt?.result || rawText || textParts.join('');
+    const baseText = resultEvt?.result || textParts.join('');
     const askQuestions = resultEvt ? extractAskQuestions(resultEvt) : null;
     // Yield ask_questions BEFORE done so the streaming card is still open when the gateway appends the form
     if (askQuestions && askQuestions.length > 0) {
@@ -639,123 +644,6 @@ export class ClaudeCodeAgent implements Agent {
 
   // ── Internals ─────────────────────────────────────────────
 
-  private _conversationCwd(conversationId: string): string | null {
-    if (!this.opts.cwd) return null;
-    // Sanitize conversationId for use as a directory name (replace ':' with '_')
-    const dirName = conversationId.replace(/:/g, '_');
-    const cwd = join(this.opts.cwd, dirName);
-    mkdirSync(cwd, { recursive: true });
-    this._prepareWorkspace(cwd);
-    return cwd;
-  }
-
-  /**
-   * Prepare a workspace directory with agent-specific config files:
-   * - .mcp.json for MCP server definitions (hot-reloaded from config file)
-   * - .claude/skills/<name> symlinks for skill directories (with stale cleanup)
-   */
-  private _prepareWorkspace(cwd: string): void {
-    this._syncMcpServers(cwd);
-    this._syncSkills(cwd);
-  }
-
-  /** Re-read mcpServers from config file on each process start so changes take effect without daemon restart. */
-  private _syncMcpServers(cwd: string): void {
-    let mcpServers: Record<string, McpServerConfig> | undefined;
-    try {
-      const freshConfig = loadConfig();
-      mcpServers = freshConfig.mcpServers;
-    } catch {
-      mcpServers = this.opts.mcpServers;
-    }
-
-    // Inject built-in memory MCP server
-    const memoryDir = join(homedir(), '.neoclaw', 'memory');
-    const mcpServerScript = join(import.meta.dir, '..', 'memory', 'mcp-server.ts');
-    const allServers: Record<string, McpServerConfig> = {
-      ...mcpServers,
-      'neoclaw-memory': {
-        type: 'stdio',
-        command: 'bun',
-        args: ['run', mcpServerScript],
-        env: { NEOCLAW_MEMORY_DIR: memoryDir },
-      },
-    };
-
-    const mcpPath = join(cwd, '.mcp.json');
-    const mcpConfig = { mcpServers: allServers };
-    writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2));
-    log.info(`Wrote .mcp.json to ${cwd}`);
-  }
-
-  /** Sync skill symlinks: create new, update changed, remove stale. */
-  private _syncSkills(cwd: string): void {
-    const skillsDir = this.opts.skillsDir;
-    if (!skillsDir || !existsSync(skillsDir)) return;
-
-    const destSkillsDir = join(cwd, '.claude', 'skills');
-    mkdirSync(destSkillsDir, { recursive: true });
-
-    // Collect valid skill names from source directory
-    let srcEntries: string[];
-    try {
-      srcEntries = readdirSync(skillsDir);
-    } catch {
-      return;
-    }
-
-    const validSkills = new Set<string>();
-    for (const name of srcEntries) {
-      const srcSkill = join(skillsDir, name);
-      try {
-        if (!lstatSync(srcSkill).isDirectory()) continue;
-        if (!existsSync(join(srcSkill, 'SKILL.md'))) continue;
-      } catch {
-        continue;
-      }
-      validSkills.add(name);
-
-      const destLink = join(destSkillsDir, name);
-      // Create or update the symlink
-      try {
-        if (lstatSync(destLink).isSymbolicLink()) {
-          if (readlinkSync(destLink) === srcSkill) continue; // already correct
-          unlinkSync(destLink); // target changed, re-create
-        } else {
-          continue; // real dir/file exists, don't overwrite
-        }
-      } catch {
-        // destLink doesn't exist — will create below
-      }
-
-      try {
-        symlinkSync(srcSkill, destLink);
-        log.info(`Linked skill "${name}" → ${destLink}`);
-      } catch (err) {
-        log.warn(`Failed to symlink skill "${name}": ${err}`);
-      }
-    }
-
-    // Remove stale symlinks that no longer correspond to a valid skill
-    let destEntries: string[];
-    try {
-      destEntries = readdirSync(destSkillsDir);
-    } catch {
-      return;
-    }
-    for (const name of destEntries) {
-      if (validSkills.has(name)) continue;
-      const destLink = join(destSkillsDir, name);
-      try {
-        if (!lstatSync(destLink).isSymbolicLink()) continue; // don't touch real dirs/files
-        unlinkSync(destLink);
-        log.info(`Removed stale skill symlink "${name}" from ${destSkillsDir}`);
-      } catch {
-        // ignore cleanup errors
-      }
-    }
-  }
-
   private async _getOrCreate(request: RunRequest): Promise<ClaudeProcess> {
     const { conversationId, chatId, gatewayKind } = request;
     const existing = this._pool.get(conversationId);
@@ -765,11 +653,12 @@ export class ClaudeCodeAgent implements Agent {
     }
 
     const resumeSessionId = this._sessionIds.get(conversationId);
+    const workspaceDir = this._workspace.prepareWorkspace(conversationId);
     const proc = new ClaudeProcess({
       model: this.opts.model,
       allowedTools: this.opts.allowedTools,
       systemPrompt: this.opts.systemPrompt ?? null,
-      cwd: this._conversationCwd(conversationId),
+      cwd: workspaceDir,
       resumeSessionId,
       // Inject routing context so CLI tools (e.g. neoclaw-cron) know the current chat
       extraEnv: { NEOCLAW_CHAT_ID: chatId, NEOCLAW_GATEWAY_KIND: gatewayKind },

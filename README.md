@@ -7,7 +7,7 @@
   </p>
   <p>
     NeoClaw is a scalable AI super assistant designed with a Gateway architecture.<br/>
-    It currently supports <strong>Feishu (Lark)</strong> and <strong>WeCom</strong> as messaging gateways, with <strong>Claude Code</strong> as the powerful AI backend.
+    It currently supports <strong>Feishu (Lark)</strong> and <strong>WeCom</strong> as messaging gateways, with <strong>Claude Code</strong> and <strong>Opencode</strong> as AI backends.
   </p>
   <p>
     <a href="docs/README.zh-CN.md">中文</a> | <strong>English</strong>
@@ -35,10 +35,11 @@
   - [WeCom Configuration](#wecom-configuration)
 - [Contributing](#-contributing)
 - [License](#-license)
-
 ## ✨ Features
 
-- **Full Claude Code Support**: Powered by the world's most powerful Agent, seamlessly supporting everything from Claude Code (including Plugins, Skills, MCPs, etc.), delivering the most powerful AI capabilities.
+- **Multiple AI Backends**: Choose between **Claude Code** and **Opencode** as the AI backend, both supporting MCP servers, Skills, streaming responses, and tool use.
+  - **Claude Code** (`claude_code`): Powered by the Claude Code CLI via long-running subprocess with JSONL streaming. Supports session persistence, image attachments, and AskUserQuestion interactive forms.
+  - **Opencode** (`opencode`): Powered by the [Opencode](https://opencode.ai) local server via SDK. Supports multi-provider models and reasoning output.
 
 - **Multi-Platform Support**: Currently supports Feishu (Lark), WeCom, and Gateway Dashboard.
   - **Feishu**: Perfectly adapts to various scenarios such as private chats, group chats, and topic groups.
@@ -88,21 +89,23 @@
 ### Prerequisites
 
 - [Bun](https://bun.sh) (v1.0+)
-- **Claude Code**: Please refer to the [Claude Code Installation Guide](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) for installation and configuration.
-  > **Note**: If you do not want to subscribe to Claude Code, you can configure `~/.claude/settings.json` to use a custom API:
-  >
-  > ```json
-  > {
-  >   "env": {
-  >     "ANTHROPIC_BASE_URL": "xxx",
-  >     "ANTHROPIC_AUTH_TOKEN": "xxx",
-  >     "ANTHROPIC_MODEL": "xxx",
-  >     "ANTHROPIC_SMALL_FAST_MODEL": "xxx",
-  >     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-  >     "API_TIMEOUT_MS": "600000"
-  >   }
-  > }
-  > ```
+- **AI Backend** (choose one or both):
+  - **Claude Code** (default): Please refer to the [Claude Code Installation Guide](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) for installation and configuration.
+    > **Note**: If you do not want to subscribe to Claude Code, you can configure `~/.claude/settings.json` to use a custom API:
+    >
+    > ```json
+    > {
+    >   "env": {
+    >     "ANTHROPIC_BASE_URL": "xxx",
+    >     "ANTHROPIC_AUTH_TOKEN": "xxx",
+    >     "ANTHROPIC_MODEL": "xxx",
+    >     "ANTHROPIC_SMALL_FAST_MODEL": "xxx",
+    >     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    >     "API_TIMEOUT_MS": "600000"
+    >   }
+    > }
+    > ```
+  - **Opencode**: Install the [Opencode CLI](https://opencode.ai) and configure your preferred AI provider.
 - **At least one messaging platform**: Either Feishu (Lark) or WeCom account and app.
 
 ### Installation
@@ -126,11 +129,18 @@ bun onboard
 ```jsonc
 {
   "agent": {
-    "type": "claude_code",
-    "model": "claude-sonnet-4-6", // Custom Claude Model
+    "type": "claude_code", // AI backend: "claude_code" (default) or "opencode"
+    "model": "claude-sonnet-4-6", // Custom Claude Model 
     "systemPrompt": "", // Custom System Prompt
-    "allowedTools": [], // List of Allowed Tools
+    "allowedTools": [], // List of Allowed Tools 
     "timeoutSecs": 600, // Timeout (seconds)
+    // Opencode-specific options
+    "opencode": {
+      "model": {
+        "providerID": "anthropic", // Provider ID (e.g. "anthropic", "openai")
+        "modelID": "claude-sonnet-4-5", // Model ID supported by the provider
+      },
+    },
   },
   "feishu": {
     "appId": "your_app_id", // Feishu App ID (optional if using WeCom)
