@@ -1,6 +1,7 @@
-import { defineCommand } from 'citty';
 import { join } from 'node:path';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
+import { defineCommand } from 'citty';
+import { log } from '@clack/prompts';
 
 import { NEOCLAW_HOME } from '../../config.js';
 
@@ -14,7 +15,7 @@ export default defineCommand({
 
     // Check if the PID exists
     if (!existsSync(pidPath)) {
-      console.log('No daemon is running.');
+      log.success('No daemon is running.');
       return;
     }
 
@@ -24,7 +25,7 @@ export default defineCommand({
       const content = readFileSync(pidPath, 'utf-8').trim();
       pid = parseInt(content, 10);
     } catch {
-      console.log('Stale PID file, removing.');
+      log.success('Stale PID file, removing.');
       unlinkSync(pidPath);
       return;
     }
@@ -33,25 +34,24 @@ export default defineCommand({
     try {
       process.kill(pid, 0);
     } catch {
-      console.log(`Stale PID file (pid=${pid}), removing.`);
+      log.success(`Stale PID file (pid=${pid}), removing.`);
       unlinkSync(pidPath);
       return;
     }
 
     // Force kill
-    console.log('Force kill daemon.');
+    log.step('Force kill daemon.');
     try {
       process.kill(pid, 'SIGKILL');
     } catch (err) {
-      console.warn(`Failed to send SIGKILL: ${err}`);
+      log.error(`Failed to send SIGKILL: ${err}`);
     }
-
     await new Promise((r) => setTimeout(r, 1_000));
 
     // Manually remove PID file if still exists
     if (existsSync(pidPath)) {
       unlinkSync(pidPath);
     }
-    console.log('Daemon killed.');
+    log.success('Daemon killed.');
   },
 });

@@ -30,26 +30,25 @@ import { initFileLogs, logger, setLogLevel } from './utils/logger.js';
 
 const log = logger('daemon');
 
-/** Build the system prompt section that describes the neoclaw-cron CLI to Claude. */
+/** Build the system prompt section that describes the neoclaw cron CLI to Claude. */
 function buildCronCliSystemPrompt(): string {
-  const bin = join(NEOCLAW_HOME, 'bin', 'neoclaw-cron');
   return `\
 ## Cron Job Management
 
-Use \`${bin}\` to manage scheduled tasks. When a job triggers, its --message is sent to you in the current session.
+Use \`neoclaw cron\` to manage scheduled tasks. When a job triggers, its --message is sent to you in the current session.
 
 ### Commands
 \`\`\`bash
 # One-time task
-${bin} create --message "prompt" --run-at "2024-03-01T09:00:00+08:00" [--label "name"]
+neoclaw cron create --message "prompt" --run-at "2024-03-01T09:00:00+08:00" [--label "name"]
 
 # Recurring task (cron format: min hour day month weekday)
-${bin} create --message "prompt" --cron-expr "0 9 * * 1-5" [--label "name"]
+neoclaw cron create --message "prompt" --cron-expr "0 9 * * 1-5" [--label "name"]
 
 # List / delete / update
-${bin} list [--include-disabled]
-${bin} delete --job-id <id>
-${bin} update --job-id <id> [--label ".."] [--message ".."] [--enabled true|false] [--run-at ".."] [--cron-expr ".."]
+neoclaw cron list [--include-disabled]
+neoclaw cron delete --job-id <id>
+neoclaw cron update --job-id <id> [--label ".."] [--message ".."] [--enabled true|false] [--run-at ".."] [--cron-expr ".."]
 \`\`\`
 
 All commands output JSON.`;

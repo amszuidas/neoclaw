@@ -46,11 +46,7 @@ export async function runOnboard(): Promise<void> {
   // ── Step 1: Config file ───────────────────────────────────────
   initConfig();
 
-  // ── Step 2: CLI tools ─────────────────────────────────────────
-  console.log();
-  await installCronCli();
-
-  // ── Step 3: Skills directory ─────────────────────────────────
+  // ── Step 2: Skills directory ─────────────────────────────────
   const skillsDir = DEFAULTS.skillsDir ?? join(NEOCLAW_HOME, 'skills');
   if (!existsSync(skillsDir)) {
     mkdirSync(skillsDir, { recursive: true });
@@ -84,10 +80,7 @@ export async function runOnboard(): Promise<void> {
   console.log('  3. Start the daemon:');
   console.log('     bun start');
   console.log();
-  console.log('  4. Add ~/.neoclaw/bin to your PATH (for neoclaw-cron and other CLI tools):');
-  console.log('     echo \'export PATH="$HOME/.neoclaw/bin:$PATH"\' >> ~/.zshrc  # or ~/.bashrc');
-  console.log();
-  console.log('  5. Send a message to your bot to test it!');
+  console.log('  4. Send a message to your bot to test it!');
   console.log();
 }
 
@@ -168,30 +161,5 @@ function initMemoryDir(): void {
     } else {
       console.log(`Memory file already exists, skipping: ${dest}`);
     }
-  }
-}
-
-// ── Install CLI tools ─────────────────────────────────────────
-
-/** Compile and install the neoclaw-cron CLI binary to ~/.neoclaw/bin/neoclaw-cron. */
-async function installCronCli(): Promise<void> {
-  const binDir = join(NEOCLAW_HOME, 'bin');
-  if (!existsSync(binDir)) mkdirSync(binDir, { recursive: true });
-
-  const outfile = join(binDir, 'neoclaw-cron');
-  // Derive project root from this file's location (src/onboard.ts → project root)
-  const srcDir = fileURLToPath(new URL('.', import.meta.url));
-  const cronCliSrc = join(srcDir, 'cli', 'cron.ts');
-
-  console.log('Building neoclaw-cron CLI...');
-  const result = Bun.spawnSync(['bun', 'build', '--compile', cronCliSrc, '--outfile', outfile], {
-    stdout: 'inherit',
-    stderr: 'inherit',
-  });
-
-  if (result.exitCode === 0) {
-    console.log(`neoclaw-cron installed to: ${outfile}`);
-  } else {
-    console.error(`Failed to build neoclaw-cron (exit code ${result.exitCode})`);
   }
 }
