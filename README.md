@@ -1,7 +1,7 @@
 <div align="center">
-  <h1><img src="../imgs/logo.png" width="45" alt="Logo" /> NeoClaw</h1>
+  <h1><img src="imgs/logo.png" width="45" alt="Logo" /> NeoClaw</h1>
   <p>
-    <a href="../LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"></a>
     <img src="https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white" alt="TypeScript">
     <img src="https://img.shields.io/badge/Bun-%23000000.svg?style=flat&logo=bun&logoColor=white" alt="Bun">
   </p>
@@ -11,7 +11,7 @@
   <p>
     <a href="./README.zh-CN.draft.md">中文</a> | <strong>English</strong>
   </p>
-  <img src="../imgs/demo/identity.png" width="300" alt="Identity" />
+  <img src="imgs/demo/identity.png" width="300" alt="Identity" />
 </div>
 
 ## 📖 Table of Contents
@@ -21,10 +21,10 @@
 - [📦 Installation](#-installation)
 - [🚀 Quick Start](#-quick-start)
 - [🌐 Gateway Configuration](#-gateway-configuration)
-- [⏰ Cron Jobs](#-cron-jobs-cli)
-- [🔌 MCP Servers & Skills](#-mcp-servers--skills)
+- [⏰ Cron Jobs](#-cron-jobs)
+- [🔌 MCP Servers \& Skills](#-mcp-servers--skills)
 - [🧠 Memory System](#-memory-system)
-- [🏗️ Architecture](#-architecture)
+- [🏗️ Architecture](#️-architecture)
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
 
@@ -33,17 +33,17 @@
 - **Multiple AI backends**: Supports Claude Code (default) and Opencode, both with MCP Servers, Skills, streaming responses, and tool calls.
 - **Multi-platform gateways**: Feishu (DM/group/topic), WeChat Work, and Web Dashboard; all three can run simultaneously.
 - **Streaming responses**: Feishu uses streaming cards for a typewriter effect; Dashboard pushes deltas in real time; WeChat Work simulates streaming by chunking messages.
-  <br/><img src="../imgs/demo/streaming.png" width="300" alt="Streaming" />
+  <br/><img src="imgs/demo/streaming.png" width="300" alt="Streaming" />
 - **Requirement clarification**: Proactively opens interactive questionnaires via the `AskUserQuestion` tool.
-  <br/><img src="../imgs/demo/form.png" width="300" alt="Form" />
+  <br/><img src="imgs/demo/form.png" width="300" alt="Form" />
 - **Multimodal**: Supports Feishu image messages; the AI can directly understand image content.
-  <br/><img src="../imgs/demo/image.png" width="300" alt="Image" />
+  <br/><img src="imgs/demo/image.png" width="300" alt="Image" />
 - **Session isolation & concurrency control**: One working directory per conversation, plus a serial queue to prevent concurrent conflicts.
 - **Cron jobs**: Supports cron expressions and one-off jobs, created directly from chat via the AI.
-  <br/><img src="../imgs/demo/cron.png" width="300" alt="Cron" />
+  <br/><img src="imgs/demo/cron.png" width="300" alt="Cron" />
 - **Three-layer memory system**: Identity, semantic knowledge, and episodic summaries, backed by SQLite FTS5 full-text search.
 - **Self-evolving**: NeoClaw can modify its own code through conversation, and apply changes via the `/restart` command.
-  <br/><img src="../imgs/demo/restart.png" width="300" alt="Restart" />
+  <br/><img src="imgs/demo/restart.png" width="300" alt="Restart" />
 - **Slash commands**: `/clear` (clear session), `/restart` (restart service), `/status` (status), `/help` (help).
 
 ## 📦 Installation
@@ -336,4 +336,4 @@ Issues and pull requests are welcome!
 
 ## 📄 License
 
-This project is open-sourced under the [Apache-2.0](../LICENSE) license.
+This project is open-sourced under the [Apache-2.0](LICENSE) license.
