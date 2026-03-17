@@ -91,6 +91,10 @@ export class OpencodeAgent implements Agent {
     // Subscribe to events BEFORE sending prompt to avoid missing early events
     const events = await client.event.subscribe({ query: { directory: workspaceDir } });
 
+    log.info(
+      `Prompt with dir: ${workspaceDir}, model: ${this._options.model?.modelID}, text: ${request.text}`
+    );
+
     // Send prompt asynchronously (returns immediately)
     const promptResult = await client.session.promptAsync({
       path: { id: sessionId },
