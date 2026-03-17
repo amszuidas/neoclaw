@@ -14,7 +14,7 @@ import type { AgentStreamEvent, RunResponse } from '../../agents/types.js';
 import { logger } from '../../utils/logger.js';
 import type { Gateway, InboundMessage, MessageHandler, ReplyFn, StreamHandler } from '../types.js';
 import { WeworkWsClient, type InboundMessage as WsInboundMessage, type MessageCallback } from './ws-client.js';
-import { buildMarkdownContent } from './sender.js';
+
 
 /**
  * 格式化统计信息
@@ -35,6 +35,11 @@ const log = logger('wework-ws-gateway');
  * 思考占位符（显示在 LLM 处理时）
  */
 const THINKING_PLACEHOLDER = '思考中...';
+
+/**
+ * 企业微信流式消息更新时效限制（6 分钟），预留 30 秒安全余量
+ */
+const STREAM_EXPIRY_MS = 5.5 * 60 * 1000;
 
 /**
  * 生成流 ID
@@ -340,6 +345,30 @@ export class WeworkWsGateway implements Gateway {
     const streamHandler: StreamHandler = async (stream) => {
       let accumulatedThinking = ''; // 累积的思考内容
       let accumulatedText = ''; // 累积的文本内容
+      let currentStreamId = streamId;
+      let streamStartedAt = Date.now();
+
+      /**
+       * 检查当前流是否已过期，如果过期则关闭旧流并创建新流
+       * 返回当前可用的 streamId
+       */
+      const ensureActiveStream = (): string => {
+        if (Date.now() - streamStartedAt >= STREAM_EXPIRY_MS) {
+          // 关闭旧流
+          this._client.sendStream({
+            reqId: wsMsg.reqId,
+            streamId: currentStreamId,
+            content: accumulatedText || accumulatedThinking || '...',
+            finish: true,
+          });
+          // 创建新流
+          const oldId = currentStreamId;
+          currentStreamId = generateStreamId();
+          streamStartedAt = Date.now();
+          log.info('Stream expired, rotated to new stream', { oldStreamId: oldId, newStreamId: currentStreamId });
+        }
+        return currentStreamId;
+      };
 
       for await (const evt of stream) {
         if (evt.type === 'thinking_delta') {
@@ -348,7 +377,7 @@ export class WeworkWsGateway implements Gateway {
           // 发送流式更新，显示思考内容
           this._client.sendStream({
             reqId: wsMsg.reqId,
-            streamId,
+            streamId: ensureActiveStream(),
             content: `💭 思考过程：\n\n${accumulatedThinking}`,
             finish: false,
           });
@@ -358,7 +387,7 @@ export class WeworkWsGateway implements Gateway {
           // 发送流式更新，显示当前文本
           this._client.sendStream({
             reqId: wsMsg.reqId,
-            streamId,
+            streamId: ensureActiveStream(),
             content: accumulatedText,
             finish: false,
           });
@@ -379,7 +408,7 @@ export class WeworkWsGateway implements Gateway {
 
           this._client.sendStream({
             reqId: wsMsg.reqId,
-            streamId,
+            streamId: ensureActiveStream(),
             content: finalMessage,
             finish: true,
           });
