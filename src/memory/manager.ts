@@ -258,7 +258,7 @@ export class MemoryManager {
     const truncated = transcript.length > maxChars ? transcript.slice(-maxChars) : transcript;
     const rawChars = transcript.length;
     const truncatedChars = truncated.length;
-    const summaryTimeoutSecs = loadConfig().agent.summaryTimeoutSecs ?? 300;
+    const summaryTimeoutSecs = loadConfig().summaryTimeoutSecs ?? 300;
     const startedAt = Date.now();
 
     log.info(

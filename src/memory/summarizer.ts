@@ -9,11 +9,11 @@ import { loadConfig } from '../config.js';
 
 const DEFAULT_SUMMARY_TIMEOUT_SECS = 300;
 
-/** Model priority: config.agent.summaryModel > ANTHROPIC_SMALL_FAST_MODEL > haiku default. */
+/** Model priority: config.agents.claude_code.summaryModel > ANTHROPIC_SMALL_FAST_MODEL > haiku default. */
 function getSummaryModel(): string {
   try {
     const config = loadConfig();
-    if (config.agent.summaryModel) return config.agent.summaryModel;
+    if (config.agents.claude_code?.summaryModel) return config.agents.claude_code.summaryModel;
   } catch {
     /* ignore */
   }
@@ -23,7 +23,7 @@ function getSummaryModel(): string {
 function getSummaryTimeoutMs(): number {
   try {
     const config = loadConfig();
-    const secs = config.agent.summaryTimeoutSecs ?? DEFAULT_SUMMARY_TIMEOUT_SECS;
+    const secs = config.summaryTimeoutSecs ?? DEFAULT_SUMMARY_TIMEOUT_SECS;
     return Math.max(1, secs) * 1000;
   } catch {
     return DEFAULT_SUMMARY_TIMEOUT_SECS * 1000;

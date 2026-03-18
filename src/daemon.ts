@@ -252,7 +252,7 @@ export class NeoClawDaemon {
     const dispatcher = new Dispatcher();
 
     // Build and register the agent
-    const agentType = this.config.agent.type;
+    const agentType = this.config.agent;
     if (!BUILDIN_AGENTS.includes(agentType)) {
       log.error(
         `Unsupported agent type in config: "${agentType}". Supported types: ${BUILDIN_AGENTS.join(', ')}`
@@ -277,21 +277,21 @@ export class NeoClawDaemon {
     }
 
     const systemPrompt =
-      [this.config.agent.systemPrompt, cronPrompt, fileAccessPrompt].filter(Boolean).join('\n\n') ||
+      [this.config.systemPrompt, cronPrompt, fileAccessPrompt].filter(Boolean).join('\n\n') ||
       undefined;
 
     // Supported agents
     const agents = [
       new ClaudeCodeAgent({
-        model: this.config.agent.model,
-        allowedTools: this.config.agent.allowedTools,
+        model: this.config.agents.claude_code.model,
+        allowedTools: this.config.agents.claude_code.allowedTools,
         systemPrompt,
         cwd: this.config.workspacesDir,
         mcpServers: this.config.mcpServers,
         skillsDir: this.config.skillsDir,
       }),
       new OpencodeAgent({
-        model: this.config.agent.opencode?.model,
+        model: this.config.agents.opencode.model,
         systemPrompt,
         cwd: this.config.workspacesDir,
         skillsDir: this.config.skillsDir,
@@ -316,8 +316,8 @@ export class NeoClawDaemon {
     dispatcher.setMemoryManager(memoryManager);
 
     // Register Feishu gateway if credentials are present
-    if (this.config.feishu.appId && this.config.feishu.appSecret) {
-      const feishu = new FeishuGateway(this.config.feishu);
+    if (this.config.channels.feishu?.appId && this.config.channels.feishu?.appSecret) {
+      const feishu = new FeishuGateway(this.config.channels.feishu);
       dispatcher.addGateway(feishu);
       log.info('Feishu gateway registered');
     } else {
@@ -325,12 +325,12 @@ export class NeoClawDaemon {
     }
 
     // Register Wework gateway if credentials are present
-    if (this.config.wework?.botId && this.config.wework?.secret) {
+    if (this.config.channels.wework?.botId && this.config.channels.wework?.secret) {
       const { WeworkWsGateway } = await import('./gateway/wework/ws-gateway.js');
       const weworkConfig = {
-        botId: this.config.wework.botId,
-        secret: this.config.wework.secret,
-        websocketUrl: this.config.wework.websocketUrl,
+        botId: this.config.channels.wework.botId,
+        secret: this.config.channels.wework.secret,
+        websocketUrl: this.config.channels.wework.websocketUrl,
       };
       const wework = new WeworkWsGateway(weworkConfig);
       dispatcher.addGateway(wework);
@@ -340,10 +340,10 @@ export class NeoClawDaemon {
     }
 
     // Register Dashboard gateway if enabled
-    if (this.config.dashboard?.enabled) {
+    if (this.config.channels.dashboard?.enabled) {
       const { DashboardGateway } = await import('./gateway/dashboard/gateway.js');
-      const dashboard = new DashboardGateway(this.config.dashboard);
-      const port = this.config.dashboard.port ?? 3000;
+      const dashboard = new DashboardGateway(this.config.channels.dashboard);
+      const port = this.config.channels.dashboard.port ?? 3000;
       dispatcher.addGateway(dashboard);
       log.info(`Dashboard gateway registered on http://localhost:${port}`);
     } else {
@@ -351,9 +351,9 @@ export class NeoClawDaemon {
     }
 
     // Ensure at least one gateway is configured
-    const hasFeishu = this.config.feishu.appId && this.config.feishu.appSecret;
-    const hasWework = this.config.wework?.botId && this.config.wework?.secret;
-    const hasDashboard = this.config.dashboard?.enabled;
+    const hasFeishu = this.config.channels.feishu?.appId && this.config.channels.feishu?.appSecret;
+    const hasWework = this.config.channels.wework?.botId && this.config.channels.wework?.secret;
+    const hasDashboard = this.config.channels.dashboard?.enabled;
 
     if (!hasFeishu && !hasWework && !hasDashboard) {
       log.error(

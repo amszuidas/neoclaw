@@ -16,19 +16,19 @@ const CONFIG_PATH = join(NEOCLAW_HOME, 'config.json');
 // - Credential fields use placeholder strings as a guide for the user.
 const TEMPLATE = {
   ...DEFAULTS,
-  agent: {
-    ...DEFAULTS.agent,
-    systemPrompt: undefined,
-  },
-  feishu: {
-    ...DEFAULTS.feishu,
-    appId: 'YOUR_FEISHU_APP_ID',
-    appSecret: 'YOUR_FEISHU_APP_SECRET',
-  },
-  wework: {
-    ...DEFAULTS.wework,
-    botId: 'YOUR_WEWORK_BOT_ID',
-    secret: 'YOUR_WEWORK_SECRET',
+  systemPrompt: undefined,
+  channels: {
+    ...DEFAULTS.channels,
+    feishu: {
+      ...DEFAULTS.channels.feishu,
+      appId: 'YOUR_FEISHU_APP_ID',
+      appSecret: 'YOUR_FEISHU_APP_SECRET',
+    },
+    wework: {
+      ...DEFAULTS.channels.wework,
+      botId: 'YOUR_WEWORK_BOT_ID',
+      secret: 'YOUR_WEWORK_SECRET',
+    },
   },
 };
 
@@ -93,19 +93,19 @@ function initConfig(): void {
       const cfg = JSON.parse(existing);
       // Check if at least one gateway is properly configured (二选一即可)
       const feishuOk =
-        typeof cfg?.feishu?.appId === 'string' &&
-        cfg.feishu.appId !== '' &&
-        !cfg.feishu.appId.startsWith('YOUR_') &&
-        typeof cfg?.feishu?.appSecret === 'string' &&
-        cfg.feishu.appSecret !== '' &&
-        !cfg.feishu.appSecret.startsWith('YOUR_');
+        typeof cfg?.channels?.feishu?.appId === 'string' &&
+        cfg.channels.feishu.appId !== '' &&
+        !cfg.channels.feishu.appId.startsWith('YOUR_') &&
+        typeof cfg?.channels?.feishu?.appSecret === 'string' &&
+        cfg.channels.feishu.appSecret !== '' &&
+        !cfg.channels.feishu.appSecret.startsWith('YOUR_');
       const weworkOk =
-        typeof cfg?.wework?.botId === 'string' &&
-        cfg.wework.botId !== '' &&
-        !cfg.wework.botId.startsWith('YOUR_') &&
-        typeof cfg?.wework?.secret === 'string' &&
-        cfg.wework.secret !== '' &&
-        !cfg.wework.secret.startsWith('YOUR_');
+        typeof cfg?.channels?.wework?.botId === 'string' &&
+        cfg.channels.wework.botId !== '' &&
+        !cfg.channels.wework.botId.startsWith('YOUR_') &&
+        typeof cfg?.channels?.wework?.secret === 'string' &&
+        cfg.channels.wework.secret !== '' &&
+        !cfg.channels.wework.secret.startsWith('YOUR_');
       hasRealCredentials = feishuOk || weworkOk;
     } catch {
       /* parse error — overwrite */
