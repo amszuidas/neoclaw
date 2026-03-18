@@ -13,40 +13,7 @@ export const NEOCLAW_HOME = join(homedir(), '.neoclaw');
 
 // ── Config schema ─────────────────────────────────────────────
 
-export interface AgentConfig {
-  /** Which agent backend to use. Currently only "claude_code" and "opencode" are supported. */
-  type: 'claude_code' | 'opencode' | string;
-  /** Model override (e.g. "claude-opus-4-5"). Defaults to claude CLI's default. */
-  model?: string;
-  /** Model used for session summarization. Default: ANTHROPIC_SMALL_FAST_MODEL or haiku. */
-  summaryModel?: string;
-  /** Extra system prompt appended to the agent's default prompt. */
-  systemPrompt?: string;
-  /**
-   * List of allowed tools for the agent. If empty, all tools are permitted
-   * (using --dangerously-skip-permissions).
-   */
-  allowedTools?: string[];
-  /** Max seconds to wait for an agent response before timing out. Default: 300. */
-  timeoutSecs?: number;
-  /** Max seconds to wait for session summarization Claude CLI call. Default: 300. */
-  summaryTimeoutSecs?: number;
-  /**
-   * OpenCode specific options.
-   */
-  opencode?: {
-    model?: {
-      providerID: string;
-      modelID: string;
-    };
-    summaryModel?: {
-      providerID: string;
-      modelID: string;
-    };
-  };
-}
-
-export interface FeishuConfig {
+export type FeishuConfig = {
   appId: string;
   appSecret: string;
   verificationToken?: string;
@@ -55,9 +22,9 @@ export interface FeishuConfig {
   domain?: string;
   /** Chat IDs that the bot should reply to without being @mentioned. */
   groupAutoReply?: string[];
-}
+};
 
-export interface WeworkConfig {
+export type WeworkConfig = {
   /** Bot ID - 企业微信智能机器人 ID */
   botId: string;
   /** Secret - 企业微信智能机器人密钥 */
@@ -66,44 +33,83 @@ export interface WeworkConfig {
   websocketUrl?: string;
   /** 自动回复的群聊 ID 列表 */
   groupAutoReply?: string[];
-}
+};
 
-export interface DashboardConfig {
+export type DashboardConfig = {
   /** 是否启用 Gateway Dashboard */
   enabled?: boolean;
   /** HTTP 服务端口 */
   port?: number;
   /** 是否启用 CORS */
   cors?: boolean;
-}
+};
 
-export interface McpServerConfig {
+export type McpServerConfig = {
   type: 'stdio' | 'http' | 'sse';
   command?: string;
   args?: string[];
   url?: string;
   headers?: Record<string, string>;
   env?: Record<string, string>;
-}
+};
 
-export interface NeoClawConfig {
-  agent: AgentConfig;
-  feishu: FeishuConfig;
-  /** 企业微信配置（可选） */
-  wework?: WeworkConfig;
-  /** Gateway Dashboard 配置（可选） */
-  dashboard?: DashboardConfig;
-  /** MCP servers to expose to agents. Keyed by server name. */
-  mcpServers?: Record<string, McpServerConfig>;
+export type ClaudeCodeConfig = {
+  /** Model override (e.g. "claude-opus-4-5"). Defaults to claude CLI's default. */
+  model?: string;
+  /** Model used for session summarization. Default: haiku. */
+  summaryModel?: string;
+  /**
+   * List of allowed tools. If empty, all tools are permitted
+   * (using --dangerously-skip-permissions).
+   */
+  allowedTools?: string[];
+};
+
+export type OpencodeConfig = {
+  /** Model to use, specified as { providerID, modelID }. */
+  model?: {
+    providerID: string;
+    modelID: string;
+  };
+  /** Model used for session summarization. */
+  summaryModel?: {
+    providerID: string;
+    modelID: string;
+  };
+  allowedTools?: string[];
+};
+
+export type NeoClawConfig = {
+  /** Which agent backend to use. Currently supports "claude_code" and "opencode". */
+  agent: 'claude_code' | 'opencode';
+  /** Extra system prompt appended to the agent's default prompt. */
+  systemPrompt?: string;
+  /** Max seconds to wait for an agent response before timing out. Default: 600. */
+  timeoutSecs?: number;
+  /** Max seconds to wait for session summarization. Default: 300. */
+  summaryTimeoutSecs?: number;
   /** Directory for agent workspaces. Default: ~/.neoclaw/workspaces. */
   workspacesDir?: string;
+  /** MCP servers to expose to agents. Keyed by server name. */
+  mcpServers?: Record<string, McpServerConfig>;
   /** Directory containing skill subdirectories. Default: ~/.neoclaw/skills. */
   skillsDir?: string;
   /** Minimum log level to output. Default: "info". */
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   /** File path blacklist - agents will be prevented from reading/writing these paths. Supports glob patterns. */
   fileBlacklist?: string[];
-}
+
+  agents: {
+    claude_code: ClaudeCodeConfig;
+    opencode: OpencodeConfig;
+  };
+
+  channels: {
+    feishu?: FeishuConfig;
+    wework?: WeworkConfig;
+    dashboard?: DashboardConfig;
+  };
+};
 
 // ── Defaults ──────────────────────────────────────────────────
 
@@ -138,36 +144,13 @@ Your source code is at \`~/neoclaw/\`. Only Zuidas may access or modify it — p
 `;
 
 export const DEFAULTS: NeoClawConfig = {
-  agent: {
-    type: 'claude_code',
-    model: 'sonnet',
-    summaryModel: 'haiku',
-    summaryTimeoutSecs: 300,
-    systemPrompt: DEFAULT_SYSTEM_PROMPT,
-    allowedTools: [],
-    timeoutSecs: 600,
-  },
-  feishu: {
-    appId: '',
-    appSecret: '',
-    verificationToken: '',
-    encryptKey: '',
-    domain: 'feishu',
-    groupAutoReply: [],
-  },
-  wework: {
-    botId: '',
-    secret: '',
-    groupAutoReply: [],
-  },
-  dashboard: {
-    enabled: false,
-    port: 3000,
-    cors: true,
-  },
+  agent: 'claude_code',
+  systemPrompt: DEFAULT_SYSTEM_PROMPT,
+  timeoutSecs: 600,
+  summaryTimeoutSecs: 300,
+  workspacesDir: join(NEOCLAW_HOME, 'workspaces'),
   mcpServers: {},
   skillsDir: join(NEOCLAW_HOME, 'skills'),
-  workspacesDir: join(NEOCLAW_HOME, 'workspaces'),
   logLevel: 'info',
   fileBlacklist: [
     '~/.claude/**',
@@ -180,15 +163,56 @@ export const DEFAULTS: NeoClawConfig = {
     '~/.neoclaw/config.json', // NeoClaw config file (protects blacklist itself)
     '~/.neoclaw/config.json.backup', // Config backups
   ],
+  agents: {
+    claude_code: { model: 'sonnet', summaryModel: 'haiku', allowedTools: [] },
+    opencode: {},
+  },
+  channels: {
+    feishu: { appId: '', appSecret: '', domain: 'feishu', groupAutoReply: [] },
+    wework: { botId: '', secret: '', groupAutoReply: [] },
+    dashboard: { enabled: false, port: 3000, cors: true },
+  },
 };
 
 // ── Loader ────────────────────────────────────────────────────
+
+function migrateFileConfig(raw: Record<string, unknown>): void {
+  // Migrate old format: agent was an object with type/model/etc.
+  if (raw['agent'] && typeof raw['agent'] === 'object') {
+    const old = raw['agent'] as Record<string, unknown>;
+    raw['agent'] = (old['type'] as string) ?? 'claude_code';
+    raw['systemPrompt'] ??= old['systemPrompt'];
+    raw['timeoutSecs'] ??= old['timeoutSecs'];
+    raw['summaryTimeoutSecs'] ??= old['summaryTimeoutSecs'];
+    const agents = (raw['agents'] ?? {}) as Record<string, unknown>;
+    const cc = (agents['claude_code'] ?? {}) as Record<string, unknown>;
+    cc['model'] ??= old['model'];
+    cc['summaryModel'] ??= old['summaryModel'];
+    cc['allowedTools'] ??= old['allowedTools'];
+    agents['claude_code'] = cc;
+    if (old['opencode']) agents['opencode'] ??= old['opencode'];
+    raw['agents'] = agents;
+  }
+  // Migrate feishu/wework/dashboard to channels
+  if (raw['feishu'] || raw['wework'] || raw['dashboard']) {
+    const channels = (raw['channels'] ?? {}) as Record<string, unknown>;
+    channels['feishu'] ??= raw['feishu'];
+    channels['wework'] ??= raw['wework'];
+    channels['dashboard'] ??= raw['dashboard'];
+    raw['channels'] = channels;
+    delete raw['feishu'];
+    delete raw['wework'];
+    delete raw['dashboard'];
+  }
+}
 
 function readFileConfig(): Partial<NeoClawConfig> {
   const configPath = process.env['NEOCLAW_CONFIG'] ?? join(NEOCLAW_HOME, 'config.json');
   if (!existsSync(configPath)) return {};
   try {
-    return JSON.parse(readFileSync(configPath, 'utf-8')) as Partial<NeoClawConfig>;
+    const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>;
+    migrateFileConfig(raw);
+    return raw as Partial<NeoClawConfig>;
   } catch (err) {
     console.error(`[neoclaw] Failed to parse config file at ${configPath}:`, err);
     return {};
@@ -217,48 +241,60 @@ export function loadConfig(): NeoClawConfig {
           .filter(Boolean)
       : (fileVal ?? def);
 
+  const feishu = file.channels?.feishu;
+  const wework = file.channels?.wework;
+  const dashboard = file.channels?.dashboard;
+
   return {
-    agent: {
-      type: str('NEOCLAW_AGENT_TYPE', file.agent?.type, DEFAULTS.agent.type),
-      model: opt('NEOCLAW_MODEL', file.agent?.model),
-      summaryModel: opt('NEOCLAW_SUMMARY_MODEL', file.agent?.summaryModel),
-      summaryTimeoutSecs: num(
-        'NEOCLAW_SUMMARY_TIMEOUT_SECS',
-        file.agent?.summaryTimeoutSecs,
-        DEFAULTS.agent.summaryTimeoutSecs ?? 300
-      ),
-      systemPrompt:
-        opt('NEOCLAW_SYSTEM_PROMPT', file.agent?.systemPrompt) ?? DEFAULTS.agent.systemPrompt,
-      allowedTools: arr('NEOCLAW_ALLOWED_TOOLS', file.agent?.allowedTools, []),
-      timeoutSecs: num('NEOCLAW_TIMEOUT_SECS', file.agent?.timeoutSecs, 600),
-    },
-    feishu: {
-      appId: str('FEISHU_APP_ID', file.feishu?.appId, ''),
-      appSecret: str('FEISHU_APP_SECRET', file.feishu?.appSecret, ''),
-      verificationToken: opt('FEISHU_VERIFICATION_TOKEN', file.feishu?.verificationToken),
-      encryptKey: opt('FEISHU_ENCRYPT_KEY', file.feishu?.encryptKey),
-      domain: str('FEISHU_DOMAIN', file.feishu?.domain, 'feishu'),
-      groupAutoReply: arr('FEISHU_GROUP_AUTO_REPLY', file.feishu?.groupAutoReply, []),
-    },
-    wework: {
-      botId: str('WEWORK_BOT_ID', file.wework?.botId, ''),
-      secret: str('WEWORK_SECRET', file.wework?.secret, ''),
-      websocketUrl: opt('WEWORK_WEBSOCKET_URL', file.wework?.websocketUrl),
-      groupAutoReply: arr('WEWORK_GROUP_AUTO_REPLY', file.wework?.groupAutoReply, []),
-    },
-    dashboard: {
-      enabled: env['NEOCLAW_DASHBOARD_ENABLED'] === 'true' || file.dashboard?.enabled || false,
-      port: num('NEOCLAW_DASHBOARD_PORT', file.dashboard?.port, 3000),
-      cors: env['NEOCLAW_DASHBOARD_CORS'] === 'false' ? false : (file.dashboard?.cors ?? true),
-    },
-    mcpServers: file.mcpServers ?? {},
-    workspacesDir: str(
-      'NEOCLAW_WORKSPACES_DIR',
-      file.workspacesDir,
-      join(NEOCLAW_HOME, 'workspaces')
+    agent: str('NEOCLAW_AGENT_TYPE', file.agent, DEFAULTS.agent) as NeoClawConfig['agent'],
+    systemPrompt: opt('NEOCLAW_SYSTEM_PROMPT', file.systemPrompt) ?? DEFAULTS.systemPrompt,
+    timeoutSecs: num('NEOCLAW_TIMEOUT_SECS', file.timeoutSecs, DEFAULTS.timeoutSecs!),
+    summaryTimeoutSecs: num(
+      'NEOCLAW_SUMMARY_TIMEOUT_SECS',
+      file.summaryTimeoutSecs,
+      DEFAULTS.summaryTimeoutSecs!
     ),
-    skillsDir: str('NEOCLAW_SKILLS_DIR', file.skillsDir, join(NEOCLAW_HOME, 'skills')),
+    workspacesDir: str('NEOCLAW_WORKSPACES_DIR', file.workspacesDir, DEFAULTS.workspacesDir!),
+    mcpServers: file.mcpServers ?? {},
+    skillsDir: str('NEOCLAW_SKILLS_DIR', file.skillsDir, DEFAULTS.skillsDir!),
     logLevel: str('NEOCLAW_LOG_LEVEL', file.logLevel, 'info') as NeoClawConfig['logLevel'],
     fileBlacklist: arr('NEOCLAW_FILE_BLACKLIST', file.fileBlacklist, DEFAULTS.fileBlacklist!),
+    agents: {
+      claude_code: {
+        model: opt('NEOCLAW_MODEL', file.agents?.claude_code?.model),
+        summaryModel: opt('NEOCLAW_SUMMARY_MODEL', file.agents?.claude_code?.summaryModel),
+        allowedTools: arr(
+          'NEOCLAW_ALLOWED_TOOLS',
+          file.agents?.claude_code?.allowedTools ?? null,
+          []
+        ),
+      },
+      opencode: {
+        model: file.agents?.opencode?.model,
+        summaryModel: file.agents?.opencode?.summaryModel,
+        allowedTools: file.agents?.opencode?.allowedTools,
+      },
+    },
+    channels: {
+      feishu: {
+        appId: str('FEISHU_APP_ID', feishu?.appId, ''),
+        appSecret: str('FEISHU_APP_SECRET', feishu?.appSecret, ''),
+        verificationToken: opt('FEISHU_VERIFICATION_TOKEN', feishu?.verificationToken),
+        encryptKey: opt('FEISHU_ENCRYPT_KEY', feishu?.encryptKey),
+        domain: str('FEISHU_DOMAIN', feishu?.domain, 'feishu'),
+        groupAutoReply: arr('FEISHU_GROUP_AUTO_REPLY', feishu?.groupAutoReply ?? null, []),
+      },
+      wework: {
+        botId: str('WEWORK_BOT_ID', wework?.botId, ''),
+        secret: str('WEWORK_SECRET', wework?.secret, ''),
+        websocketUrl: opt('WEWORK_WEBSOCKET_URL', wework?.websocketUrl),
+        groupAutoReply: arr('WEWORK_GROUP_AUTO_REPLY', wework?.groupAutoReply ?? null, []),
+      },
+      dashboard: {
+        enabled: env['NEOCLAW_DASHBOARD_ENABLED'] === 'true' || dashboard?.enabled || false,
+        port: num('NEOCLAW_DASHBOARD_PORT', dashboard?.port, 3000),
+        cors: env['NEOCLAW_DASHBOARD_CORS'] === 'false' ? false : (dashboard?.cors ?? true),
+      },
+    },
   };
 }
