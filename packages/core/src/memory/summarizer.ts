@@ -5,14 +5,14 @@
  * to generate a structured summary from conversation history.
  */
 
-import { loadConfig } from '../config.js';
+import { Config } from '../config';
 
 const DEFAULT_SUMMARY_TIMEOUT_SECS = 300;
 
 /** Model priority: config.agents.claude_code.summaryModel > ANTHROPIC_SMALL_FAST_MODEL > haiku default. */
 function getSummaryModel(): string {
   try {
-    const config = loadConfig();
+    const config = Config.get();
     if (config.agents.claude_code?.summaryModel) return config.agents.claude_code.summaryModel;
   } catch {
     /* ignore */
@@ -22,7 +22,7 @@ function getSummaryModel(): string {
 
 function getSummaryTimeoutMs(): number {
   try {
-    const config = loadConfig();
+    const config = Config.get();
     const secs = config.summaryTimeoutSecs ?? DEFAULT_SUMMARY_TIMEOUT_SECS;
     return Math.max(1, secs) * 1000;
   } catch {

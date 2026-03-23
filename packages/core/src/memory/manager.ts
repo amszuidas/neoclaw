@@ -9,10 +9,10 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
 import type { MemoryEntry, MemoryStore } from './store.js';
 import { summarizeTranscript } from './summarizer.js';
+import { Config } from '../config';
 
 const log = logger('memory');
 
@@ -258,7 +258,7 @@ export class MemoryManager {
     const truncated = transcript.length > maxChars ? transcript.slice(-maxChars) : transcript;
     const rawChars = transcript.length;
     const truncatedChars = truncated.length;
-    const summaryTimeoutSecs = loadConfig().summaryTimeoutSecs ?? 300;
+    const summaryTimeoutSecs = Config.get().summaryTimeoutSecs ?? 300;
     const startedAt = Date.now();
 
     log.info(

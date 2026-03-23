@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./config": "./src/config.ts",
+    "./config": "./src/config/index.ts",
     "./dispatcher": "./src/dispatcher.ts",
     "./memory": "./src/memory/index.ts",
     "./types/agent": "./src/types/agent.ts",
@@ -20,7 +20,9 @@
     "typecheck": "bun run --bun tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1"
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "es-toolkit": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "^1.3.10"

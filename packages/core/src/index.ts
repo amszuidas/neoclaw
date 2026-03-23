@@ -1,4 +1,3 @@
-export * from './config.js';
 export * from './dispatcher.js';
 export * from './types/agent.js';
 export * from './types/gateway.js';

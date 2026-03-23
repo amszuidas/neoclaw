@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 
-import { loadConfig, McpServerConfig } from '@neoclaw/core/config';
+import { McpServerConfig } from '@neoclaw/core/config';
 import { logger } from '@neoclaw/core/utils/logger';
 
 /**
@@ -92,11 +92,7 @@ export class WorkspaceManager {
   private _syncMcpServers(cwd: string): void {
     let mcpServers: Record<string, McpServerConfig> | undefined;
 
-    try {
-      mcpServers = loadConfig().mcpServers;
-    } catch {
-      mcpServers = this._config.mcpServers;
-    }
+    mcpServers = this._config.mcpServers;
 
     const createBuiltinMemoryServer = (): McpServerConfig => {
       const memoryDir = join(homedir(), '.neoclaw', 'memory');

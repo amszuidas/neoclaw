@@ -1,7 +1,6 @@
 import { defineCommand } from 'citty';
-
 import { loadConfig } from '@neoclaw/core/config';
-import { NeoClawDaemon } from '../../daemon.js';
+import { NeoClawDaemon } from '../daemon';
 
 export default defineCommand({
   meta: {

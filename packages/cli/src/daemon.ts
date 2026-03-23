@@ -20,12 +20,12 @@ import { OpencodeAgent } from '@neoclaw/agents/opencode';
 import { createFileBlockedAgent } from '@neoclaw/agents/file-blocked-agent';
 import { BUILDIN_AGENTS } from '@neoclaw/core';
 import type { NeoClawConfig } from '@neoclaw/core/config';
-import { NEOCLAW_HOME } from '@neoclaw/core/config';
 import { CronScheduler } from '@neoclaw/cron/scheduler';
 import { Dispatcher } from '@neoclaw/core/dispatcher';
 import { FeishuGateway } from '@neoclaw/gateway/feishu';
 import { MemoryManager, MemoryStore } from '@neoclaw/core/memory';
 import { initFileLogs, logger, setLogLevel } from '@neoclaw/core/utils/logger';
+import { NEOCLAW_HOME } from '@neoclaw/core/config';
 
 const log = logger('daemon');
 
@@ -282,15 +282,15 @@ export class NeoClawDaemon {
     // Supported agents
     const agents = [
       new ClaudeCodeAgent({
-        model: this.config.agents.claude_code.model,
-        allowedTools: this.config.agents.claude_code.allowedTools,
+        model: this.config.agents.claude_code?.model,
+        allowedTools: this.config.agents.claude_code?.allowedTools,
         systemPrompt,
         cwd: this.config.workspacesDir,
         mcpServers: this.config.mcpServers,
         skillsDir: this.config.skillsDir,
       }),
       new OpencodeAgent({
-        model: this.config.agents.opencode.model,
+        model: this.config.agents.opencode?.model,
         systemPrompt,
         cwd: this.config.workspacesDir,
         skillsDir: this.config.skillsDir,

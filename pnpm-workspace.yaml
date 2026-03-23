@@ -1,2 +1,6 @@
 packages:
   - 'packages/*'
+
+catalog:
+  zod: ^4.3.6
+  es-toolkit: ^1.45.1

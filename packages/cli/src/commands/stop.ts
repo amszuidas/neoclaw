@@ -2,7 +2,6 @@ import { join } from 'node:path';
 import { existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { defineCommand } from 'citty';
 import { log } from '@clack/prompts';
-
 import { NEOCLAW_HOME } from '@neoclaw/core/config';
 
 export default defineCommand({
