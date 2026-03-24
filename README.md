@@ -50,6 +50,7 @@
 
 **Prerequisites:**
 
+- [pnpm](https://pnpm.io) v10+
 - [Bun](https://bun.sh) v1.0+
 - One AI backend:
   - [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) (default)
@@ -62,27 +63,24 @@ git clone https://github.com/amszuidas/neoclaw.git
 cd neoclaw
 
 # 2. Install dependencies
-bun install
-
-# 3. Link the CLI globally (for development)
-bun link
+pnpm install
 ```
 
-After that, the `neoclaw` command is available globally:
+Run CLI commands from the repo root using `pnpm cli`:
 
-| Command                     | Description              |
-| --------------------------- | ------------------------ |
-| `neoclaw onboard`           | Initialize configuration |
-| `neoclaw start`             | Start the daemon         |
-| `neoclaw stop`              | Stop the daemon          |
-| `neoclaw cron <subcommand>` | Manage cron jobs         |
+| Command                      | Description              |
+| ---------------------------- | ------------------------ |
+| `pnpm cli onboard`           | Initialize configuration |
+| `pnpm cli start`             | Start the daemon         |
+| `pnpm cli stop`              | Stop the daemon          |
+| `pnpm cli cron <subcommand>` | Manage cron jobs         |
 
 ## 🚀 Quick Start
 
 ### Initialize
 
 ```bash
-neoclaw onboard
+pnpm cli onboard
 ```
 
 ### Configure
@@ -91,27 +89,32 @@ Edit `~/.neoclaw/config.json` and configure at least the AI backend and one gate
 
 ```jsonc
 {
-  "agent": {
-    "type": "claude_code", // "claude_code" (default) or "opencode"
-    "model": "claude-sonnet-4-6", // Optional Claude model override
-    "timeoutSecs": 600,
+  "agent": "claude_code", // "claude_code" (default) or "opencode"
+  "timeoutSecs": 600,
+  // Agent-specific settings
+  "agents": {
+    "claude_code": {
+      "model": "claude-sonnet-4-6", // Optional model override
+    },
   },
   // Configure either Feishu or WeChat Work (or both)
-  "feishu": {
-    "appId": "YOUR_FEISHU_APP_ID",
-    "appSecret": "YOUR_FEISHU_APP_SECRET",
-    "verificationToken": "",
-    "encryptKey": "",
-    "domain": "feishu", // "feishu" or "lark"
-  },
-  "wework": {
-    "botId": "YOUR_WEWORK_BOT_ID",
-    "secret": "YOUR_WEWORK_SECRET",
-  },
-  // Optional: enable Web Dashboard
-  "dashboard": {
-    "enabled": false,
-    "port": 3000,
+  "channels": {
+    "feishu": {
+      "appId": "YOUR_FEISHU_APP_ID",
+      "appSecret": "YOUR_FEISHU_APP_SECRET",
+      "verificationToken": "",
+      "encryptKey": "",
+      "domain": "feishu", // "feishu" or "lark"
+    },
+    "wework": {
+      "botId": "YOUR_WEWORK_BOT_ID",
+      "secret": "YOUR_WEWORK_SECRET",
+    },
+    // Optional: enable Web Dashboard
+    "dashboard": {
+      "enabled": false,
+      "port": 3000,
+    },
   },
 }
 ```
@@ -121,17 +124,17 @@ Edit `~/.neoclaw/config.json` and configure at least the AI backend and one gate
 ### Start
 
 ```bash
-neoclaw start
+pnpm cli start
 ```
 
 The service daemonizes automatically and runs in the background. Logs: `~/.neoclaw/logs/neoclaw.log`
 
 ```bash
 # Stop
-neoclaw stop
+pnpm cli stop
 
 # Dev mode (auto-restart on file changes)
-bun run dev
+pnpm run dev
 ```
 
 With Dashboard enabled, open `http://localhost:5173` in your browser to chat with NeoClaw.

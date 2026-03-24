@@ -33,6 +33,9 @@ jobs:
             web:
               - 'packages/web/**'
 
+      - name: Debug changes output
+        run: echo "web=${{ steps.filter.outputs.web }}"
+
   lint:
     name: lint
     runs-on: ubuntu-latest
