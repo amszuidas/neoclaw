@@ -10,15 +10,22 @@
     "cli": "pnpm --filter neoclaw run start",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",
-    "format": "pnpm -r run format"
+    "format": "pnpm -r run format",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "catalog:",
     "@types/bun": "catalog:",
     "eslint": "catalog:",
     "globals": "catalog:",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "prettier": "catalog:",
     "typescript-eslint": "catalog:"
   },
-  "packageManager": "pnpm@10.32.1"
+  "packageManager": "pnpm@10.32.1",
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs}": "eslint --fix",
+    "*": "prettier --write"
+  }
 }
