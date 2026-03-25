@@ -1,0 +1,26 @@
+{
+  "name": "@neoclaw/agents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./claude-code": "./src/claude-code.ts",
+    "./opencode": "./src/opencode.ts",
+    "./file-blocked-agent": "./src/file-blocked-agent.ts",
+    "./workspace-manager": "./src/workspace-manager.ts"
+  },
+  "scripts": {
+    "typecheck": "bun run --bun tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@neoclaw/core": "workspace:*",
+    "@opencode-ai/sdk": "^1.2.25"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

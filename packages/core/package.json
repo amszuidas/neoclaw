@@ -1,0 +1,33 @@
+{
+  "name": "@neoclaw/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./config": "./src/config/index.ts",
+    "./dispatcher": "./src/dispatcher.ts",
+    "./memory": "./src/memory/index.ts",
+    "./types/agent": "./src/types/agent.ts",
+    "./types/gateway": "./src/types/gateway.ts",
+    "./types/constants": "./src/types/constants.ts",
+    "./utils/logger": "./src/utils/logger.ts",
+    "./utils/mutex": "./src/utils/mutex.ts",
+    "./utils/file-guard": "./src/utils/file-guard.ts",
+    "./utils/debounced-flush": "./src/utils/debounced-flush.ts"
+  },
+  "scripts": {
+    "typecheck": "bun run --bun tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "es-toolkit": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

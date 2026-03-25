@@ -1,36 +1,31 @@
 {
-  "name": "neoclaw",
-  "description": "NeoClaw — a super AI assistant",
+  "name": "neoclaw-monorepo",
+  "private": true,
   "type": "module",
-  "version": "0.1.0",
   "engines": {
-    "bun": ">=1.0.0"
+    "pnpm": ">=10.0.0",
+    "node": ">=20.0.0"
   },
   "scripts": {
-    "onboard": "bun run src/index.ts onboard",
-    "start": "bun run src/index.ts",
-    "dev": "bun run --watch src/index.ts",
-    "lint": "eslint src/",
-    "typecheck": "bun run --bun tsc --noEmit"
-  },
-  "bin": {
-    "neoclaw": "./src/index.ts"
-  },
-  "dependencies": {
-    "@clack/prompts": "^1.1.0",
-    "@larksuiteoapi/node-sdk": "^1.59.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "@opencode-ai/sdk": "^1.2.25",
-    "citty": "^0.2.1",
-    "ws": "^8.19.0"
+    "cli": "pnpm --filter neoclaw run start",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r run lint",
+    "format": "pnpm -r run format",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@types/bun": "^1.3.10",
-    "@types/ws": "^8.18.1",
-    "eslint": "^9.0.0",
-    "eslint-plugin-prettier": "^5.0.0",
-    "prettier": "^3.0.0",
-    "typescript-eslint": "^8.0.0"
+    "@eslint/js": "catalog:",
+    "@types/bun": "catalog:",
+    "eslint": "catalog:",
+    "globals": "catalog:",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "catalog:",
+    "typescript-eslint": "catalog:"
+  },
+  "packageManager": "pnpm@10.32.1",
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs}": "eslint --fix",
+    "*": "prettier --write"
   }
 }

@@ -28,7 +28,6 @@
 - [🤝 贡献指南](#-贡献指南)
 - [📄 许可证](#-许可证)
 
-
 ## ✨ 功能特性
 
 - **多 AI 后端**：支持 Claude Code（默认）和 Opencode，均支持 MCP Servers、Skills、流式响应和工具调用。
@@ -50,6 +49,8 @@
 ## 📦 安装
 
 **前置要求：**
+
+- [pnpm](https://pnpm.io) v10+
 - [Bun](https://bun.sh) v1.0+
 - AI 后端（任选其一）：
   - [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview)（默认）
@@ -62,27 +63,24 @@ git clone https://github.com/amszuidas/neoclaw.git
 cd neoclaw
 
 # 2. 安装依赖
-bun install
-
-# 3. 全局链接 CLI（开发阶段）
-bun link
+pnpm install
 ```
 
-完成后 `neoclaw` 命令即可在终端全局使用：
+在仓库根目录使用 `pnpm cli` 运行 CLI 命令：
 
-| 命令 | 说明 |
-| --- | --- |
-| `neoclaw onboard` | 初始化配置 |
-| `neoclaw start` | 启动后台进程 |
-| `neoclaw stop` | 停止后台进程 |
-| `neoclaw cron <子命令>` | 管理定时任务 |
+| 命令                     | 说明         |
+| ------------------------ | ------------ |
+| `pnpm cli onboard`       | 初始化配置   |
+| `pnpm cli start`         | 启动后台进程 |
+| `pnpm cli stop`          | 停止后台进程 |
+| `pnpm cli cron <子命令>` | 管理定时任务 |
 
 ## 🚀 快速开始
 
 ### 初始化
 
 ```bash
-neoclaw onboard
+pnpm cli onboard
 ```
 
 ### 配置
@@ -91,28 +89,33 @@ neoclaw onboard
 
 ```jsonc
 {
-  "agent": {
-    "type": "claude_code",        // "claude_code"（默认）或 "opencode"
-    "model": "claude-sonnet-4-6", // Claude 模型（可选）
-    "timeoutSecs": 600
+  "agent": "claude_code", // "claude_code"（默认）或 "opencode"
+  "timeoutSecs": 600,
+  // Agent 专属配置
+  "agents": {
+    "claude_code": {
+      "model": "claude-sonnet-4-6", // Claude 模型（可选）
+    },
   },
   // 配置飞书或企业微信其中之一（或两者）
-  "feishu": {
-    "appId": "YOUR_FEISHU_APP_ID",
-    "appSecret": "YOUR_FEISHU_APP_SECRET",
-    "verificationToken": "",
-    "encryptKey": "",
-    "domain": "feishu"            // "feishu" 或 "lark"
+  "channels": {
+    "feishu": {
+      "appId": "YOUR_FEISHU_APP_ID",
+      "appSecret": "YOUR_FEISHU_APP_SECRET",
+      "verificationToken": "",
+      "encryptKey": "",
+      "domain": "feishu", // "feishu" 或 "lark"
+    },
+    "wework": {
+      "botId": "YOUR_WEWORK_BOT_ID",
+      "secret": "YOUR_WEWORK_SECRET",
+    },
+    // 可选：启用 Web Dashboard
+    "dashboard": {
+      "enabled": false,
+      "port": 3000,
+    },
   },
-  "wework": {
-    "botId": "YOUR_WEWORK_BOT_ID",
-    "secret": "YOUR_WEWORK_SECRET"
-  },
-  // 可选：启用 Web Dashboard
-  "dashboard": {
-    "enabled": false,
-    "port": 3000
-  }
 }
 ```
 
@@ -121,17 +124,17 @@ neoclaw onboard
 ### 启动服务
 
 ```bash
-neoclaw start
+pnpm cli start
 ```
 
 服务自动守护进程化，后台运行。日志路径：`~/.neoclaw/logs/neoclaw.log`
 
 ```bash
 # 停止服务
-neoclaw stop
+pnpm cli stop
 
 # 开发模式（文件变更自动重启）
-bun run dev
+pnpm run dev
 ```
 
 启用 Dashboard 后，浏览器访问 `http://localhost:5173` 即可直接与 NeoClaw 对话。
@@ -144,18 +147,19 @@ bun run dev
 
 **配置字段：**
 
-| 字段 | 说明 |
-| --- | --- |
-| `appId` | 飞书应用 App ID |
-| `appSecret` | 飞书应用 App Secret |
-| `verificationToken` | 事件订阅 Verification Token |
-| `encryptKey` | 事件订阅 Encrypt Key（可选） |
-| `domain` | `"feishu"` 或 `"lark"` |
-| `groupAutoReply` | 无需 @mention 即自动回复的群聊 ID 列表 |
+| 字段                | 说明                                   |
+| ------------------- | -------------------------------------- |
+| `appId`             | 飞书应用 App ID                        |
+| `appSecret`         | 飞书应用 App Secret                    |
+| `verificationToken` | 事件订阅 Verification Token            |
+| `encryptKey`        | 事件订阅 Encrypt Key（可选）           |
+| `domain`            | `"feishu"` 或 `"lark"`                 |
+| `groupAutoReply`    | 无需 @mention 即自动回复的群聊 ID 列表 |
 
 **环境变量覆盖：** `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, `FEISHU_VERIFICATION_TOKEN`, `FEISHU_ENCRYPT_KEY`, `FEISHU_DOMAIN`, `FEISHU_GROUP_AUTO_REPLY`
 
 **关键步骤：**
+
 1. 在[飞书开放平台](https://open.feishu.cn/)创建应用
 2. 配置事件订阅（消息接收、卡片动作触发）
 3. 将凭证填入配置文件
@@ -166,15 +170,16 @@ bun run dev
 
 **配置字段：**
 
-| 字段 | 说明 |
-| --- | --- |
-| `botId` | 企业微信机器人 ID |
-| `secret` | 机器人 Secret |
+| 字段             | 说明                                   |
+| ---------------- | -------------------------------------- |
+| `botId`          | 企业微信机器人 ID                      |
+| `secret`         | 机器人 Secret                          |
 | `groupAutoReply` | 无需 @mention 即自动回复的群聊 ID 列表 |
 
 **环境变量覆盖：** `WEWORK_BOT_ID`, `WEWORK_SECRET`, `WEWORK_GROUP_AUTO_REPLY`
 
 **关键步骤：**
+
 1. 在[企业微信管理后台](https://work.weixin.qq.com/) → 应用管理 → 智能助手创建机器人
 2. 选择 **API 模式** → **长连接方式**
 3. 将 `botId` 和 `secret` 填入配置文件
@@ -185,9 +190,9 @@ bun run dev
 {
   "dashboard": {
     "enabled": true,
-    "port": 3000,   // WebSocket 服务端口
-    "cors": true
-  }
+    "port": 3000, // WebSocket 服务端口
+    "cors": true,
+  },
 }
 ```
 
@@ -197,15 +202,15 @@ bun run dev
 
 ### 平台功能对比
 
-| 功能 | 飞书 | 企业微信 | Dashboard |
-| --- | --- | --- | --- |
-| 连接方式 | WebSocket | WebSocket（长连接） | WebSocket |
-| 流式响应 | ✅ 原生卡片 | ⚠️ 分块消息 | ✅ 实时推送 |
-| 交互式问卷 | ✅ | ⚠️ Markdown 格式 | ❌ |
-| @提及 | ✅ | ✅ | ❌ |
-| 话题线程 | ✅ | ❌ | ✅ 会话管理 |
-| 图片/文件 | ✅ | ✅ | ❌ |
-| 需要公网服务器 | ✅ | ❌ | ✅ |
+| 功能           | 飞书        | 企业微信            | Dashboard   |
+| -------------- | ----------- | ------------------- | ----------- |
+| 连接方式       | WebSocket   | WebSocket（长连接） | WebSocket   |
+| 流式响应       | ✅ 原生卡片 | ⚠️ 分块消息         | ✅ 实时推送 |
+| 交互式问卷     | ✅          | ⚠️ Markdown 格式    | ❌          |
+| @提及          | ✅          | ✅                  | ❌          |
+| 话题线程       | ✅          | ❌                  | ✅ 会话管理 |
+| 图片/文件      | ✅          | ✅                  | ❌          |
+| 需要公网服务器 | ✅          | ❌                  | ✅          |
 
 ## ⏰ 定时任务
 
@@ -248,14 +253,14 @@ NeoClaw 在统一层面配置 MCP Servers 和 Skills，自动翻译为底层 Age
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@example/mcp-server"],
-      "env": { "API_KEY": "xxx" }
+      "env": { "API_KEY": "xxx" },
     },
     "remote-server": {
       "type": "http",
       "url": "https://mcp.example.com/sse",
-      "headers": { "Authorization": "Bearer xxx" }
-    }
-  }
+      "headers": { "Authorization": "Bearer xxx" },
+    },
+  },
 }
 ```
 
@@ -288,15 +293,16 @@ NeoClaw 内置三层记忆系统，通过 MCP 服务器（`neoclaw-memory`）自
 └── index.sqlite      # FTS5 全文检索索引
 ```
 
-| 类别 | 说明 | 写入时机 |
-| --- | --- | --- |
-| **identity** | 性格、价值观、沟通风格 | `memory_save` + `category="identity"` |
-| **knowledge** | 按主题组织的持久化知识 | `memory_save` + `topic` |
-| **episode** | 会话摘要 | `/clear` 或 `/new` 时自动生成 |
+| 类别          | 说明                   | 写入时机                              |
+| ------------- | ---------------------- | ------------------------------------- |
+| **identity**  | 性格、价值观、沟通风格 | `memory_save` + `category="identity"` |
+| **knowledge** | 按主题组织的持久化知识 | `memory_save` + `topic`               |
+| **episode**   | 会话摘要               | `/clear` 或 `/new` 时自动生成         |
 
 **四个 MCP 工具：** `memory_search`（全文检索）、`memory_read`（读取文件）、`memory_save`（保存内容）、`memory_list`（列出记忆）
 
 **记忆规则：**
+
 - 每次对话开始时自动检索相关记忆作为上下文
 - 主人的重要信息保存到 knowledge 记忆
 - 其他用户可检索但不可写入

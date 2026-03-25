@@ -1,0 +1,27 @@
+{
+  "name": "@neoclaw/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./feishu": "./src/feishu/gateway.ts",
+    "./wework": "./src/wework/ws-gateway.ts",
+    "./dashboard": "./src/dashboard/gateway.ts"
+  },
+  "scripts": {
+    "typecheck": "bun run --bun tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@neoclaw/core": "workspace:*",
+    "@larksuiteoapi/node-sdk": "^1.59.0",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/ws": "^8.18.1",
+    "typescript": "catalog:"
+  }
+}

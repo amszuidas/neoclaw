@@ -1,0 +1,31 @@
+{
+  "name": "neoclaw",
+  "description": "NeoClaw — a super AI assistant",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "typecheck": "bun run --bun tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "bin": {
+    "neoclaw": "./src/index.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.1.0",
+    "@neoclaw/agents": "workspace:*",
+    "@neoclaw/core": "workspace:*",
+    "@neoclaw/cron": "workspace:*",
+    "@neoclaw/gateway": "workspace:*",
+    "citty": "^0.2.1",
+    "es-toolkit": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}
