@@ -287,6 +287,11 @@ export class FeishuGateway implements Gateway {
           replyToMessageId,
           fileName: img.fileName,
           mimeType: img.mimeType,
+          uploadCreds: {
+            appId: this._config.appId,
+            appSecret: this._config.appSecret,
+            domain: this._config.domain as 'feishu' | 'lark' | undefined,
+          },
         });
       } catch (err) {
         log.error(`Failed to send outbound image: ${err}`);

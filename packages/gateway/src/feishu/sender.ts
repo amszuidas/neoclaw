@@ -20,10 +20,11 @@
  */
 
 import type * as Lark from '@larksuiteoapi/node-sdk';
+import { randomUUID } from 'node:crypto';
 import type { AskQuestion } from '@neoclaw/core';
 import { logger } from '@neoclaw/core/utils/logger';
 import type { SendResult } from './client.js';
-import { idType } from './client.js';
+import { apiBaseUrl, idType } from './client.js';
 
 const log = logger('sender');
 
@@ -65,6 +66,68 @@ type CardElement = MarkdownEl | HrEl | CollapsiblePanel | DivEl;
 // ── Tool step formatting ─────────────────────────────────────
 
 type ToolStepInfo = { text: string; icon: string };
+
+const IMAGE_SEND_MAX_ATTEMPTS = 3;
+const IMAGE_SEND_BASE_BACKOFF_MS = 300;
+const FEISHU_REST_TIMEOUT_MS = 15000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryImageError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes('socket connection was closed unexpectedly') ||
+    msg.includes('econnreset') ||
+    msg.includes('etimedout') ||
+    msg.includes('timeout') ||
+    msg.includes('code 5') ||
+    msg.includes('temporarily unavailable')
+  );
+}
+
+async function withRetry<T>(
+  stage: 'upload' | 'upload_rest' | 'send',
+  fn: (attempt: number) => Promise<T>
+): Promise<T> {
+  let attempt = 1;
+  let lastErr: unknown;
+
+  while (attempt <= IMAGE_SEND_MAX_ATTEMPTS) {
+    const startedAt = Date.now();
+    try {
+      const result = await fn(attempt);
+      if (attempt > 1) {
+        log.info(
+          `Feishu image ${stage} succeeded on retry ${attempt}/${IMAGE_SEND_MAX_ATTEMPTS} (${Date.now() - startedAt}ms)`
+        );
+      }
+      return result;
+    } catch (err) {
+      lastErr = err;
+      const elapsedMs = Date.now() - startedAt;
+      const retryable = shouldRetryImageError(err);
+      const msg = err instanceof Error ? err.message : String(err);
+
+      log.warn(
+        `Feishu image ${stage} failed (attempt ${attempt}/${IMAGE_SEND_MAX_ATTEMPTS}, retryable=${retryable}, elapsed=${elapsedMs}ms): ${msg}`
+      );
+
+      if (!retryable || attempt >= IMAGE_SEND_MAX_ATTEMPTS) break;
+
+      const jitter = Math.floor(Math.random() * 120);
+      const waitMs = IMAGE_SEND_BASE_BACKOFF_MS * 3 ** (attempt - 1) + jitter;
+      await sleep(waitMs);
+      attempt += 1;
+    }
+  }
+
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error(`Feishu image ${stage} failed after retries`);
+}
 
 /** Map a tool_use event to a human-readable description and Feishu standard icon. */
 export function formatToolStep(name: string, input: unknown): ToolStepInfo {
@@ -184,7 +247,7 @@ async function sendMessage(
   target: string,
   msgType: string,
   content: string,
-  opts?: { replyToMessageId?: string }
+  opts?: { replyToMessageId?: string; uuid?: string }
 ): Promise<SendResult> {
   const receiveId = target.trim();
 
@@ -212,14 +275,19 @@ async function sendMessage(
           message: {
             create: (opts: {
               params: { receive_id_type: string };
-              data: { receive_id: string; msg_type: string; content: string };
+              data: { receive_id: string; msg_type: string; content: string; uuid?: string };
             }) => Promise<Record<string, unknown>>;
           };
         };
       }
     ).im.message.create({
       params: { receive_id_type: idType(receiveId) },
-      data: { receive_id: receiveId, msg_type: msgType, content },
+      data: {
+        receive_id: receiveId,
+        msg_type: msgType,
+        content,
+        ...(opts?.uuid ? { uuid: opts.uuid } : {}),
+      },
     });
   }
 
@@ -278,12 +346,106 @@ export async function uploadImage(
   return imageKey;
 }
 
+export type FeishuUploadCredentials = {
+  appId: string;
+  appSecret: string;
+  domain?: 'feishu' | 'lark' | (string & {});
+};
+
+async function getAppAccessToken(creds: FeishuUploadCredentials): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FEISHU_REST_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${apiBaseUrl(creds.domain)}/auth/v3/app_access_token/internal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ app_id: creds.appId, app_secret: creds.appSecret }),
+      signal: ctrl.signal,
+    });
+
+    const rawText = await res.text();
+    let raw: { code?: number; msg?: string; app_access_token?: string } = {};
+    try {
+      raw = rawText ? (JSON.parse(rawText) as typeof raw) : {};
+    } catch {
+      throw new Error(
+        `Feishu app token request failed (http ${res.status}): non-JSON response ${rawText.slice(0, 300)}`
+      );
+    }
+
+    if (!res.ok || raw.code !== 0 || !raw.app_access_token) {
+      throw new Error(
+        `Feishu app token request failed (http ${res.status}, code ${raw.code ?? 'unknown'}): ${raw.msg ?? 'unknown error'}`
+      );
+    }
+
+    return raw.app_access_token;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function uploadImageViaRest(
+  image: Buffer,
+  creds: FeishuUploadCredentials,
+  opts?: { fileName?: string; mimeType?: string }
+): Promise<string> {
+  const accessToken = await getAppAccessToken(creds);
+  const mimeType = opts?.mimeType || detectImageMime(image);
+  const fileName = opts?.fileName || `image-${Date.now()}.${mimeType.split('/')[1] ?? 'bin'}`;
+
+  const form = new FormData();
+  form.append('image_type', 'message');
+  form.append('image', new Blob([image], { type: mimeType }), fileName);
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FEISHU_REST_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${apiBaseUrl(creds.domain)}/im/v1/images`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: form,
+      signal: ctrl.signal,
+    });
+
+    const rawText = await res.text();
+    let raw: {
+      code?: number;
+      msg?: string;
+      data?: { image_key?: string };
+      image_key?: string;
+    } = {};
+    try {
+      raw = rawText ? (JSON.parse(rawText) as typeof raw) : {};
+    } catch {
+      throw new Error(
+        `Feishu REST image upload failed (http ${res.status}): non-JSON response ${rawText.slice(0, 300)}`
+      );
+    }
+
+    const imageKey = raw.image_key ?? raw.data?.image_key;
+    if (!res.ok || raw.code !== 0 || !imageKey) {
+      throw new Error(
+        `Feishu REST image upload failed (http ${res.status}, code ${raw.code ?? 'unknown'}): ${raw.msg ?? 'unknown error'}`
+      );
+    }
+
+    return imageKey;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Send an image message using an existing image_key. */
 export async function sendImageByKey(
   client: Lark.Client,
   target: string,
   imageKey: string,
-  opts?: { replyToMessageId?: string }
+  opts?: { replyToMessageId?: string; uuid?: string }
 ): Promise<SendResult> {
   return sendMessage(client, target, 'image', JSON.stringify({ image_key: imageKey }), opts);
 }
@@ -293,57 +455,84 @@ export async function sendImageFromBuffer(
   client: Lark.Client,
   target: string,
   image: Buffer,
-  opts?: { replyToMessageId?: string; fileName?: string; mimeType?: string }
+  opts?: {
+    replyToMessageId?: string;
+    fileName?: string;
+    mimeType?: string;
+    uploadCreds?: FeishuUploadCredentials;
+  }
 ): Promise<SendResult> {
-  const imageKey = await uploadImage(client, image, {
-    fileName: opts?.fileName,
-    mimeType: opts?.mimeType,
-  });
-  return sendImageByKey(client, target, imageKey, { replyToMessageId: opts?.replyToMessageId });
+  let imageKey: string;
+  try {
+    imageKey = await withRetry('upload', () =>
+      uploadImage(client, image, {
+        fileName: opts?.fileName,
+        mimeType: opts?.mimeType,
+      })
+    );
+  } catch (err) {
+    const retryable = shouldRetryImageError(err);
+    const uploadCreds = opts?.uploadCreds;
+    if (!retryable || !uploadCreds) {
+      throw err;
+    }
+
+    log.warn('Feishu SDK image upload failed after retries, switching to REST upload fallback');
+    imageKey = await withRetry('upload_rest', () =>
+      uploadImageViaRest(image, uploadCreds, {
+        fileName: opts?.fileName,
+        mimeType: opts?.mimeType,
+      })
+    );
+  }
+
+  const messageUuid = randomUUID();
+  return withRetry('send', () =>
+    sendImageByKey(client, target, imageKey, {
+      replyToMessageId: opts?.replyToMessageId,
+      uuid: messageUuid,
+    })
+  );
 }
 
-// function detectImageMime(buf: Buffer): string {
-//   if (buf.length >= 8) {
-//     // PNG
-//     if (
-//       buf[0] === 0x89 &&
-//       buf[1] === 0x50 &&
-//       buf[2] === 0x4e &&
-//       buf[3] === 0x47 &&
-//       buf[4] === 0x0d &&
-//       buf[5] === 0x0a &&
-//       buf[6] === 0x1a &&
-//       buf[7] === 0x0a
-//     )
-//       return 'image/png';
-//     // GIF
-//     if (
-//       buf[0] === 0x47 &&
-//       buf[1] === 0x49 &&
-//       buf[2] === 0x46 &&
-//       buf[3] === 0x38 &&
-//       (buf[4] === 0x37 || buf[4] === 0x39) &&
-//       buf[5] === 0x61
-//     )
-//       return 'image/gif';
-//     // WebP (RIFF....WEBP)
-//     if (
-//       buf.length >= 12 &&
-//       buf[0] === 0x52 &&
-//       buf[1] === 0x49 &&
-//       buf[2] === 0x46 &&
-//       buf[3] === 0x46 &&
-//       buf[8] === 0x57 &&
-//       buf[9] === 0x45 &&
-//       buf[10] === 0x42 &&
-//       buf[11] === 0x50
-//     )
-//       return 'image/webp';
-//   }
-//   // JPEG
-//   if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) return 'image/jpeg';
-//   return 'application/octet-stream';
-// }
+function detectImageMime(buf: Buffer): string {
+  if (buf.length >= 8) {
+    if (
+      buf[0] === 0x89 &&
+      buf[1] === 0x50 &&
+      buf[2] === 0x4e &&
+      buf[3] === 0x47 &&
+      buf[4] === 0x0d &&
+      buf[5] === 0x0a &&
+      buf[6] === 0x1a &&
+      buf[7] === 0x0a
+    )
+      return 'image/png';
+    if (
+      buf[0] === 0x47 &&
+      buf[1] === 0x49 &&
+      buf[2] === 0x46 &&
+      buf[3] === 0x38 &&
+      (buf[4] === 0x37 || buf[4] === 0x39) &&
+      buf[5] === 0x61
+    )
+      return 'image/gif';
+    if (
+      buf.length >= 12 &&
+      buf[0] === 0x52 &&
+      buf[1] === 0x49 &&
+      buf[2] === 0x46 &&
+      buf[3] === 0x46 &&
+      buf[8] === 0x57 &&
+      buf[9] === 0x45 &&
+      buf[10] === 0x42 &&
+      buf[11] === 0x50
+    )
+      return 'image/webp';
+  }
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xd8) return 'image/jpeg';
+  return 'application/octet-stream';
+}
 
 // ── Streaming card (JSON 2.0, requires cardkit API) ───────────
 
