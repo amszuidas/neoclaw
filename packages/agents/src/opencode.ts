@@ -1,12 +1,18 @@
 import { createOpencode, type OpencodeClient } from '@opencode-ai/sdk';
 import { join } from 'node:path';
-import { writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { logger } from '@neoclaw/core/utils/logger';
 import type { McpServerConfig } from '@neoclaw/core/config';
 import type { Agent, AgentStreamEvent, RunRequest, RunResponse } from '@neoclaw/core';
 import { WorkspaceManager, WriteMcpConfig } from './workspace-manager.js';
 
 const log = logger('opencode');
+const MODEL_OVERRIDE_FILENAME = 'model-override.json';
+
+type OpencodeModel = {
+  providerID: string;
+  modelID: string;
+};
 
 type OpencodeAgentOptions = {
   model?: {
@@ -57,6 +63,7 @@ export class OpencodeAgent implements Agent {
    * conversationId → sessionId mapping
    */
   private _sessions = new Map<string, string>();
+  private _modelOverrides = new Map<string, OpencodeModel>();
 
   private _workspace: WorkspaceManager;
 
@@ -87,12 +94,15 @@ export class OpencodeAgent implements Agent {
     const client = await this._getClient();
     const workspaceDir = this._workspace.prepareWorkspace(request.conversationId);
     const sessionId = await this._getSession(request.conversationId, workspaceDir);
+    const activeModel = this._resolveModelForConversation(request.conversationId);
 
     // Subscribe to events BEFORE sending prompt to avoid missing early events
     const events = await client.event.subscribe({ query: { directory: workspaceDir } });
 
     log.info(
-      `Prompt with dir: ${workspaceDir}, model: ${this._options.model?.modelID}, text: ${request.text}`
+      `Prompt with dir: ${workspaceDir}, model: ${
+        activeModel ? `${activeModel.providerID}/${activeModel.modelID}` : 'default'
+      }, text: ${request.text}`
     );
 
     // Send prompt asynchronously (returns immediately)
@@ -100,7 +110,7 @@ export class OpencodeAgent implements Agent {
       path: { id: sessionId },
       body: {
         parts: [{ type: 'text', text: request.text }],
-        model: this._options.model,
+        model: activeModel,
         system: this._options.systemPrompt,
       },
       query: {
@@ -187,12 +197,46 @@ export class OpencodeAgent implements Agent {
 
   async clearConversation(conversationId: string): Promise<void> {
     const sessionId = this._sessions.get(conversationId);
-    if (!sessionId || !this._client) return;
     this._sessions.delete(conversationId);
+    if (!sessionId || !this._client) return;
     try {
       await this._client.session.delete({ path: { id: sessionId } });
     } catch (err) {
       log.warn(`Failed to delete opencode session ${sessionId}:`, err);
+    }
+  }
+
+  listModels(conversationId: string): string[] {
+    const models = new Set<string>();
+    const current = this.getModel(conversationId);
+    if (current) models.add(current);
+    if (this._options.model) {
+      models.add(`${this._options.model.providerID}/${this._options.model.modelID}`);
+    }
+    return [...models];
+  }
+
+  getModel(conversationId: string): string | null {
+    const model = this._resolveModelForConversation(conversationId);
+    if (!model) return null;
+    return `${model.providerID}/${model.modelID}`;
+  }
+
+  setModel(conversationId: string, model: string): boolean {
+    const parsed = parseModelString(model);
+    if (!parsed) {
+      log.warn(`Invalid model format: ${model}, expected providerID/modelID`);
+      return false;
+    }
+
+    this._modelOverrides.set(conversationId, parsed);
+    try {
+      writeModelOverride(this._modelOverridePath(conversationId), parsed);
+      log.info(`Model override saved for ${conversationId}: ${model}`);
+      return true;
+    } catch (err) {
+      log.warn(`Failed to persist model override for ${conversationId}: ${err}`);
+      return false;
     }
   }
 
@@ -246,4 +290,59 @@ export class OpencodeAgent implements Agent {
     log.debug(`Created session ${sessionId} for conversation ${conversationId}`);
     return sessionId;
   }
+
+  private _resolveModelForConversation(conversationId: string): OpencodeModel | undefined {
+    const cached = this._modelOverrides.get(conversationId);
+    if (cached) return cached;
+
+    const persisted = readModelOverride(this._modelOverridePath(conversationId));
+    if (persisted) {
+      this._modelOverrides.set(conversationId, persisted);
+      return persisted;
+    }
+
+    return this._options.model;
+  }
+
+  private _modelOverridePath(conversationId: string): string {
+    const workspaceDir = this._workspace.prepareWorkspace(conversationId) ?? process.cwd();
+    const metaDir = join(workspaceDir, '.neoclaw');
+    if (!existsSync(metaDir)) mkdirSync(metaDir, { recursive: true });
+    return join(metaDir, MODEL_OVERRIDE_FILENAME);
+  }
+}
+
+function parseModelString(model: string): OpencodeModel | null {
+  const trimmed = model.trim();
+  const parts = trimmed.split('/');
+  if (parts.length !== 2) return null;
+  const providerID = parts[0];
+  const modelID = parts[1];
+  if (!providerID || !modelID) return null;
+  return { providerID, modelID };
+}
+
+function readModelOverride(path: string): OpencodeModel | undefined {
+  try {
+    if (!existsSync(path)) return undefined;
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<OpencodeModel>;
+    if (
+      typeof parsed.providerID !== 'string' ||
+      parsed.providerID.trim().length === 0 ||
+      typeof parsed.modelID !== 'string' ||
+      parsed.modelID.trim().length === 0
+    ) {
+      return undefined;
+    }
+    return {
+      providerID: parsed.providerID.trim(),
+      modelID: parsed.modelID.trim(),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function writeModelOverride(path: string, model: OpencodeModel): void {
+  writeFileSync(path, JSON.stringify(model, null, 2), 'utf-8');
 }

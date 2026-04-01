@@ -104,6 +104,23 @@ export interface Agent {
   /** Clear the conversation context for a given conversationId. */
   clearConversation(conversationId: string): Promise<void>;
 
+  /**
+   * List selectable models for a conversation.
+   * Implementations may return an empty list when discovery is unavailable.
+   */
+  listModels?(conversationId: string): Promise<string[]> | string[];
+
+  /**
+   * Get the effective model for a conversation, if known.
+   */
+  getModel?(conversationId: string): Promise<string | null> | string | null;
+
+  /**
+   * Set a model for a conversation.
+   * Returns true when the model is accepted and persisted.
+   */
+  setModel?(conversationId: string, model: string): Promise<boolean> | boolean;
+
   /** Shut down all background processes managed by this agent. */
   dispose(): Promise<void>;
 }

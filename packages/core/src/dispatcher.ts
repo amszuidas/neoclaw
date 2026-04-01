@@ -6,16 +6,17 @@
  * - Start/stop all gateways
  * - Serialize per-conversation message handling (prevent race conditions)
  * - Manage conversation sessions (stable session IDs for multi-turn context)
- * - Handle built-in slash commands (/clear, /status, /restart, /help)
+ * - Handle built-in slash commands (/clear, /status, /restart, /help, /model)
  */
 
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Agent, AgentStreamEvent, RunRequest, RunResponse } from './types/agent.js';
-import type {
+import {
   Gateway,
   InboundMessage,
   MessageHandler,
+  parseBuiltinSlashCommand,
   ReplyFn,
   StreamHandler,
 } from './types/gateway.js';
@@ -39,6 +40,7 @@ export class Dispatcher {
   private _workspacesDir: string | null = null;
   private _memoryManager: MemoryManager | null = null;
   private _onRestart: RestartCallback | null = null;
+  private _pendingModelSelection = new Set<string>();
 
   // ── Registration ──────────────────────────────────────────
 
@@ -91,10 +93,16 @@ export class Dispatcher {
       let responseText = '';
 
       // Slash commands are always non-streaming
-      const command = this._tryParseCommand(msg.text);
+      const commandInput = this._normalizePendingModelSelection(msg.rawText ?? msg.text, key);
+      const command = parseBuiltinSlashCommand(commandInput);
       if (command) {
-        log.info(`Executing command: ${command}`);
-        const response = await this._execCommand(command, msg, key);
+        log.info(`Executing command: ${command.command}`);
+        const commandMsg: InboundMessage = {
+          ...msg,
+          rawText: commandInput,
+          text: command.normalizedText,
+        };
+        const response = await this._execCommand(command.command, commandMsg, key);
         responseText = response.text;
         await reply(response);
       } else {
@@ -195,17 +203,36 @@ export class Dispatcher {
 
   // ── Built-in slash commands ──────────────────────────────
 
-  private static readonly COMMANDS = new Set(['clear', 'new', 'status', 'restart', 'help']);
-
-  private _tryParseCommand(text: string): string | null {
+  private _normalizePendingModelSelection(text: string, conversationKey: string): string {
     const trimmed = text.trim();
-    if (!trimmed.startsWith('/')) return null;
-    const end = trimmed.indexOf(' ');
-    const name = (end === -1 ? trimmed.slice(1) : trimmed.slice(1, end)).toLowerCase();
-    return Dispatcher.COMMANDS.has(name) ? name : null;
+    const builtin = parseBuiltinSlashCommand(trimmed);
+    if (builtin) {
+      if (builtin.command !== 'model') this._pendingModelSelection.delete(conversationKey);
+      return builtin.normalizedText;
+    }
+    if (!this._pendingModelSelection.has(conversationKey)) return text;
+
+    // If the user entered another slash command, cancel model selection and
+    // pass it through untouched instead of treating it as a model name.
+    if (trimmed.startsWith('/')) {
+      this._pendingModelSelection.delete(conversationKey);
+      return text;
+    }
+
+    if (/^\d+$/.test(trimmed) || /^[a-z0-9._:/-]+$/i.test(trimmed)) {
+      this._pendingModelSelection.delete(conversationKey);
+      return `/model ${trimmed}`;
+    }
+
+    this._pendingModelSelection.delete(conversationKey);
+    return text;
   }
 
-  private async _execCommand(name: string, msg: InboundMessage, key: string): Promise<RunResponse> {
+  private async _execCommand(
+    name: 'clear' | 'new' | 'status' | 'restart' | 'help' | 'model',
+    msg: InboundMessage,
+    key: string
+  ): Promise<RunResponse> {
     const isThread = key !== msg.chatId;
 
     switch (name) {
@@ -251,9 +278,93 @@ export class Dispatcher {
           '- `/clear` or `/new` — Start a fresh conversation',
           '- `/status` — Show current session and system info',
           '- `/restart` — Restart the NeoClaw daemon',
+          '- `/model` — Show or switch model',
           '- `/help` — Show this help message',
         ];
         return { text: lines.join('\n') };
+      }
+
+      case 'model': {
+        const agent = this._getAgent();
+        const currentModel = (await agent.getModel?.(key)) ?? 'default';
+        const availableModels = [...new Set((await agent.listModels?.(key)) ?? [])].sort((a, b) =>
+          a.localeCompare(b)
+        );
+        const args = msg.text.trim().split(/\s+/).slice(1);
+
+        if (args.length === 0) {
+          if (!agent.setModel) {
+            return { text: 'Current agent does not support model switching.' };
+          }
+
+          this._pendingModelSelection.add(key);
+          const lines = ['**Available Models**', `(Current: ${currentModel})`, ''];
+          if (availableModels.length > 0) {
+            availableModels.forEach((model, index) => lines.push(`${index + 1}. ${model}`));
+          } else {
+            lines.push('No discovered model list is available for this agent.');
+          }
+          lines.push('', 'Reply with a number or model name to switch model.');
+          return { text: lines.join('\n') };
+        }
+
+        this._pendingModelSelection.delete(key);
+        if (!agent.setModel) {
+          return { text: 'Current agent does not support model switching.' };
+        }
+
+        const rawArg = args.join(' ').trim();
+        let selectedModel: string | undefined;
+
+        const numericIndex = Number.parseInt(rawArg, 10);
+        if (Number.isInteger(numericIndex)) {
+          if (availableModels.length === 0) {
+            this._pendingModelSelection.add(key);
+            return {
+              text: 'No discovered model list is available for this agent. Reply with a model name to switch model.',
+            };
+          }
+          if (numericIndex >= 1 && numericIndex <= availableModels.length) {
+            selectedModel = availableModels[numericIndex - 1];
+          } else {
+            this._pendingModelSelection.add(key);
+            return {
+              text: `Invalid selection. Please reply with a number (1-${availableModels.length}) or a model name.`,
+            };
+          }
+        } else {
+          const exactMatches = availableModels.filter((model) => model.toLowerCase() === rawArg.toLowerCase());
+          if (exactMatches.length === 1) {
+            selectedModel = exactMatches[0];
+          } else {
+            const partialMatches = availableModels.filter((model) =>
+              model.toLowerCase().includes(rawArg.toLowerCase())
+            );
+            if (partialMatches.length === 1) {
+              selectedModel = partialMatches[0];
+            } else if (partialMatches.length > 1) {
+              this._pendingModelSelection.add(key);
+              const lines = ['Ambiguous model name, please choose one:'];
+              partialMatches.forEach((model, index) => lines.push(`${index + 1}. ${model}`));
+              return { text: lines.join('\n') };
+            }
+          }
+        }
+
+        if (!selectedModel) {
+          selectedModel = rawArg;
+        }
+
+        const success = await agent.setModel(key, selectedModel);
+        if (!success) {
+          this._pendingModelSelection.add(key);
+          return { text: `Failed to switch model to: ${selectedModel}` };
+        }
+
+        await agent.clearConversation(key);
+        return {
+          text: `Model switched to: **${selectedModel}**\n\nStarted a fresh session for this conversation so the new model takes effect.`,
+        };
       }
 
       default:
