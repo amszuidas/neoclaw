@@ -28,6 +28,8 @@ import { initFileLogs, logger, setLogLevel } from '@neoclaw/core/utils/logger';
 import { NEOCLAW_HOME } from '@neoclaw/core/config';
 
 const log = logger('daemon');
+const START_LOCK_PATH = join(NEOCLAW_HOME, 'cache', 'neoclaw.start.lock');
+const START_LOCK_STALE_MS = 15_000;
 
 /** Build the system prompt section that describes the neoclaw cron CLI to Claude. */
 function buildCronCliSystemPrompt(): string {
@@ -86,10 +88,14 @@ export class NeoClawDaemon {
     // takeover / PID messages land in the right file.
     initFileLogs(join(NEOCLAW_HOME, 'logs'));
     setLogLevel(this.config.logLevel ?? 'info');
-    this._takeover();
-    this._writePid();
-    this._registerSignals();
     this._ensureDirs();
+
+    await this._withStartLock(async () => {
+      this._takeover();
+      this._writePid();
+    });
+
+    this._registerSignals();
 
     const dispatcher = await this._buildDispatcher();
     const scheduler = new CronScheduler(dispatcher);
@@ -118,6 +124,7 @@ export class NeoClawDaemon {
       this._memoryManager?.stopPeriodicReindex();
       scheduler.stop();
       await dispatcher.stop();
+      this._removePidIfOwned(process.pid);
       log.info('NeoClaw daemon stopped.');
     }
   }
@@ -142,6 +149,93 @@ export class NeoClawDaemon {
     } catch {
       /* ignore */
       log.warn(`Failed to remove PID file: ${this._pidPath()}`);
+    }
+  }
+
+  private _removePidIfOwned(expectedPid: number): void {
+    const pidPath = this._pidPath();
+    if (!existsSync(pidPath)) return;
+    try {
+      const current = parseInt(readFileSync(pidPath, 'utf-8').trim(), 10);
+      if (current !== expectedPid) return;
+      unlinkSync(pidPath);
+      log.info(`PID file removed: ${pidPath}`);
+    } catch {
+      log.warn(`Failed to remove owned PID file: ${pidPath}`);
+    }
+  }
+
+  private async _withStartLock<T>(fn: () => Promise<T> | T): Promise<T> {
+    const lockDir = dirname(START_LOCK_PATH);
+    if (!existsSync(lockDir)) mkdirSync(lockDir, { recursive: true });
+    const startedAt = Date.now();
+
+    while (true) {
+      try {
+        writeFileSync(
+          START_LOCK_PATH,
+          JSON.stringify({ pid: process.pid, ts: Date.now() }),
+          { encoding: 'utf-8', flag: 'wx' }
+        );
+        break;
+      } catch {
+        let holderPid: number;
+        let holderTs: number;
+        try {
+          const raw = JSON.parse(readFileSync(START_LOCK_PATH, 'utf-8')) as {
+            pid?: number;
+            ts?: number;
+          };
+          holderPid = typeof raw.pid === 'number' ? raw.pid : 0;
+          holderTs = typeof raw.ts === 'number' ? raw.ts : 0;
+        } catch {
+          // If lock file is unreadable, try replacing it.
+          try {
+            unlinkSync(START_LOCK_PATH);
+          } catch {
+            /* ignore */
+          }
+          continue;
+        }
+
+        const staleByTime = !holderTs || Date.now() - holderTs > START_LOCK_STALE_MS;
+        let holderAlive = false;
+        if (holderPid > 0) {
+          try {
+            process.kill(holderPid, 0);
+            holderAlive = true;
+          } catch {
+            holderAlive = false;
+          }
+        }
+
+        if (staleByTime || !holderAlive) {
+          try {
+            unlinkSync(START_LOCK_PATH);
+          } catch {
+            /* ignore */
+          }
+          continue;
+        }
+
+        if (Date.now() - startedAt > 10_000) {
+          throw new Error(
+            `Startup lock is held by pid=${holderPid}; aborting to avoid duplicate daemon start`
+          );
+        }
+        await Bun.sleep(200);
+      }
+    }
+
+    try {
+      return await fn();
+    } finally {
+      try {
+        const raw = JSON.parse(readFileSync(START_LOCK_PATH, 'utf-8')) as { pid?: number };
+        if (raw.pid === process.pid) unlinkSync(START_LOCK_PATH);
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -195,7 +289,7 @@ export class NeoClawDaemon {
         log.info(`Old daemon (pid=${oldPid}) is still running.`);
       } catch {
         log.info(`Old daemon (pid=${oldPid}) exited.`);
-        this._removePid();
+        this._removePidIfOwned(oldPid);
         return;
       }
       Bun.sleepSync(1000);
@@ -210,7 +304,7 @@ export class NeoClawDaemon {
     }
 
     Bun.sleepSync(1000);
-    this._removePid();
+    this._removePidIfOwned(oldPid);
   }
 
   // ── Signal handling ───────────────────────────────────────

@@ -199,6 +199,7 @@ export class FeishuGateway implements Gateway {
 
     const msg: InboundMessage = {
       id: parsed.messageId,
+      rawText: parsed.rawText,
       text: parsed.text,
       chatId: parsed.chatId,
       threadRootId: parsed.threadRootId,

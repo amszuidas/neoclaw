@@ -12,6 +12,8 @@ import type { AgentStreamEvent, Attachment, RunResponse } from './agent.js';
 // ── Inbound message ───────────────────────────────────────────
 
 export interface InboundMessage {
+  /** Original text extracted from the platform payload before gateway decoration. */
+  rawText?: string;
   /** Platform-specific unique message ID (for deduplication). */
   id: string;
   /** Text content of the message. */
@@ -35,6 +37,46 @@ export interface InboundMessage {
   meta?: Record<string, unknown>;
   /** Chat type: 'private' for direct messages, 'group' for group chats. */
   chatType?: 'private' | 'group';
+}
+
+export type BuiltinSlashCommand = 'clear' | 'new' | 'status' | 'restart' | 'help' | 'model';
+
+const BUILTIN_SLASH_COMMAND_SET = new Set<BuiltinSlashCommand>([
+  'clear',
+  'new',
+  'status',
+  'restart',
+  'help',
+  'model',
+]);
+
+/**
+ * Parse and normalize built-in slash commands from user input.
+ *
+ * Compatibility behavior:
+ * - accepts canonical slash form, e.g. "/status"
+ * - accepts bare "status" (legacy compatibility) and normalizes it to "/status"
+ */
+export function parseBuiltinSlashCommand(input: string): {
+  command: BuiltinSlashCommand;
+  normalizedText: string;
+} | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const slashMatch = trimmed.match(/^\/([a-z]+)(?:\s+(.+))?$/i);
+  if (slashMatch) {
+    const name = slashMatch[1]?.toLowerCase() as BuiltinSlashCommand | undefined;
+    if (!name || !BUILTIN_SLASH_COMMAND_SET.has(name)) return null;
+    const arg = slashMatch[2]?.trim();
+    return { command: name, normalizedText: arg ? `/${name} ${arg}` : `/${name}` };
+  }
+
+  if (/^status$/i.test(trimmed)) {
+    return { command: 'status', normalizedText: '/status' };
+  }
+
+  return null;
 }
 
 // ── Reply / Handler ───────────────────────────────────────────

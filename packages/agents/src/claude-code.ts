@@ -10,7 +10,7 @@
 import type { FileSink, Subprocess } from 'bun';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import type { McpServerConfig } from '@neoclaw/core/config';
 import { createDebouncedFlush } from '@neoclaw/core/utils/debounced-flush';
 import { logger } from '@neoclaw/core/utils/logger';
@@ -475,12 +475,77 @@ class ClaudeProcess {
 const IDLE_TIMEOUT_MS = 20 * 60 * 1000; // 20 min
 const CLEANUP_INTERVAL_MS = 60 * 1000; // 1 min
 const SESSIONS_PATH = join(homedir(), '.neoclaw', 'cache', 'sessions.json');
+const CLAUDE_MODEL_OVERRIDE_FILE = 'model.override.json';
+const CLAUDE_MODEL_ALIASES = new Set(['sonnet', 'opus', 'haiku']);
+
+function normalizeModelName(value: string): string | null {
+  const stripped = value.trim().replace(/\[[0-9;]*m$/gi, '');
+  if (!stripped || stripped.length > 120) return null;
+  if (CLAUDE_MODEL_ALIASES.has(stripped.toLowerCase())) return stripped;
+  if (!/^[a-z0-9._/-]+$/i.test(stripped)) return null;
+  if (!/[a-z]/i.test(stripped)) return null;
+  if (!/[-_/]/.test(stripped)) return null;
+  return stripped;
+}
+
+function pushModel(out: Set<string>, value: string): void {
+  const normalized = normalizeModelName(value);
+  if (normalized) out.add(normalized);
+}
+
+function collectModelsFromKnownConfig(value: unknown, out: Set<string>): void {
+  if (!value || typeof value !== 'object') return;
+  const record = value as Record<string, unknown>;
+  const modelKeys = [
+    'allowedModel',
+    'allowedModels',
+    'model',
+    'defaultModel',
+    'fallbackModel',
+  ] as const;
+
+  for (const key of modelKeys) {
+    const entry = record[key];
+    if (typeof entry === 'string') {
+      pushModel(out, entry);
+      continue;
+    }
+    if (Array.isArray(entry)) {
+      for (const item of entry) {
+        if (typeof item === 'string') pushModel(out, item);
+      }
+    }
+  }
+}
+
+function discoverClaudeModels(): Set<string> {
+  const home = homedir();
+  const candidates = [
+    join(home, '.claude', 'config.json'),
+    join(home, '.claude', 'settings.json'),
+    join(home, '.config', 'claude', 'config.json'),
+    join(home, '.config', 'claude', 'settings.json'),
+  ];
+
+  const out = new Set<string>();
+  for (const path of candidates) {
+    if (!existsSync(path)) continue;
+    try {
+      const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+      collectModelsFromKnownConfig(parsed, out);
+    } catch (err) {
+      log.warn(`Failed to parse Claude config "${path}": ${err}`);
+    }
+  }
+  return out;
+}
 
 export class ClaudeCodeAgent implements Agent {
   readonly kind = 'claude_code';
 
   private _pool = new Map<string, ClaudeProcess>();
   private _lastUsed = new Map<string, number>();
+  private _modelOverrides = new Map<string, string>();
   /** Persists session IDs so processes can be resumed after idle reap or daemon restart. */
   private _sessionIds = new Map<string, string>();
   private _cleanupTimer: ReturnType<typeof setInterval> | null = null;
@@ -622,6 +687,42 @@ export class ClaudeCodeAgent implements Agent {
     }
   }
 
+  listModels(conversationId: string): string[] {
+    const discovered = discoverClaudeModels();
+    const current = this.getModel(conversationId)?.trim();
+    const configured = this.opts.model?.trim();
+    if (current) discovered.add(current);
+    if (configured) discovered.add(configured);
+    if (discovered.size === 0) discovered.add('sonnet');
+    return [...discovered].sort((a, b) => a.localeCompare(b));
+  }
+
+  getModel(conversationId: string): string | null {
+    const override = this._readModelOverrideFromWorkspace(conversationId);
+    if (override) return override;
+    return this.opts.model ?? null;
+  }
+
+  async setModel(conversationId: string, model: string): Promise<boolean> {
+    const normalized = model.trim();
+    if (!normalized) return false;
+
+    this._modelOverrides.set(conversationId, normalized);
+    this._writeModelOverrideToWorkspace(conversationId, normalized);
+
+    // Ensure the next turn starts a new process/session using the new model.
+    const proc = this._pool.get(conversationId);
+    if (proc) {
+      await proc.terminate();
+      this._pool.delete(conversationId);
+      this._lastUsed.delete(conversationId);
+    }
+    this._sessionIds.delete(conversationId);
+    this._flushSessions();
+    log.info(`Model override set for conversation "${conversationId}": ${normalized}`);
+    return true;
+  }
+
   async clearConversation(conversationId: string): Promise<void> {
     const proc = this._pool.get(conversationId);
     if (proc) {
@@ -685,8 +786,9 @@ export class ClaudeCodeAgent implements Agent {
 
     const resumeSessionId = this._sessionIds.get(conversationId);
     const workspaceDir = this._workspace.prepareWorkspace(conversationId);
+    const activeModel = this.getModel(conversationId);
     const proc = new ClaudeProcess({
-      model: this.opts.model,
+      model: activeModel,
       allowedTools: this.opts.allowedTools,
       systemPrompt,
       cwd: workspaceDir,
@@ -699,10 +801,51 @@ export class ClaudeCodeAgent implements Agent {
     this._lastUsed.set(conversationId, Date.now());
     this._scheduleCleanup();
     log.info(
-      `Started process for conversation "${conversationId}" (pool size: ${this._pool.size})` +
+      `Started process for conversation "${conversationId}" (model=${activeModel ?? 'default'}, pool size: ${this._pool.size})` +
         (resumeSessionId ? ` [resuming session ${resumeSessionId.slice(0, 8)}...]` : '')
     );
     return proc;
+  }
+
+  private _conversationWorkspaceDir(conversationId: string): string | null {
+    if (!this.opts.cwd) return null;
+    return join(this.opts.cwd, conversationId.replace(/:/g, '_'));
+  }
+
+  private _modelOverridePath(conversationId: string): string | null {
+    const workspaceDir = this._conversationWorkspaceDir(conversationId);
+    if (!workspaceDir) return null;
+    return join(workspaceDir, '.neoclaw', CLAUDE_MODEL_OVERRIDE_FILE);
+  }
+
+  private _readModelOverrideFromWorkspace(conversationId: string): string | null {
+    const cached = this._modelOverrides.get(conversationId);
+    if (cached) return cached;
+
+    const path = this._modelOverridePath(conversationId);
+    if (!path || !existsSync(path)) return null;
+    try {
+      const raw = JSON.parse(readFileSync(path, 'utf-8')) as { model?: unknown };
+      const model = typeof raw.model === 'string' ? raw.model.trim() : '';
+      if (!model) return null;
+      this._modelOverrides.set(conversationId, model);
+      return model;
+    } catch (err) {
+      log.warn(`Failed to read Claude model override from ${path}: ${err}`);
+      return null;
+    }
+  }
+
+  private _writeModelOverrideToWorkspace(conversationId: string, model: string): void {
+    const path = this._modelOverridePath(conversationId);
+    if (!path) return;
+    try {
+      const dir = dirname(path);
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(path, JSON.stringify({ model }, null, 2), 'utf-8');
+    } catch (err) {
+      log.warn(`Failed to write Claude model override to ${path}: ${err}`);
+    }
   }
 
   private _scheduleCleanup(): void {

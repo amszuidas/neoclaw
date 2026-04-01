@@ -10,11 +10,19 @@
  */
 
 import * as Lark from '@larksuiteoapi/node-sdk';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { createDebouncedFlush } from '@neoclaw/core/utils/debounced-flush';
+import { parseBuiltinSlashCommand } from '@neoclaw/core/types/gateway';
 import { logger } from '@neoclaw/core/utils/logger';
 import type { BotCredentials, MediaDownload, RawMessageEvent } from './client.js';
 import { getHttpClient } from './client.js';
@@ -27,12 +35,23 @@ const DEDUP_TTL_MS = 24 * 60 * 60 * 1000;
 const DEDUP_MAX_ENTRIES = 1000;
 const DEDUP_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 const DEDUP_PATH = join(homedir(), '.neoclaw', 'cache', 'feishu-dedup.json');
+const DEDUP_LOCK_PATH = join(homedir(), '.neoclaw', 'cache', 'feishu-dedup.lock');
+const DEDUP_LOCK_STALE_MS = 10_000;
+const DEDUP_LOCK_TIMEOUT_MS = 500;
+const DEDUP_LOCK_RETRY_MS = 10;
+const DEDUP_SLEEP_BUF = new SharedArrayBuffer(4);
+const DEDUP_SLEEP_VIEW = new Int32Array(DEDUP_SLEEP_BUF);
 
 const seenIds = new Map<string, number>();
 let lastCleanup = Date.now();
 
-function loadDedup(): void {
+function sleepMs(ms: number): void {
+  Atomics.wait(DEDUP_SLEEP_VIEW, 0, 0, ms);
+}
+
+function loadDedupFromDisk(): void {
   try {
+    seenIds.clear();
     if (!existsSync(DEDUP_PATH)) return;
     const entries: [string, number][] = JSON.parse(readFileSync(DEDUP_PATH, 'utf-8'));
     const now = Date.now();
@@ -44,44 +63,114 @@ function loadDedup(): void {
   }
 }
 
-const flushDedup = createDebouncedFlush(() => {
+function saveDedupToDisk(): void {
   try {
     const dir = join(homedir(), '.neoclaw', 'cache');
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(DEDUP_PATH, JSON.stringify([...seenIds.entries()]));
+    const tmpPath = `${DEDUP_PATH}.${process.pid}.${Date.now()}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify([...seenIds.entries()]), 'utf-8');
+    renameSync(tmpPath, DEDUP_PATH);
   } catch {
     // Non-critical
-    log.warn('Failed to flush Feishu deduplication cache');
+    log.warn('Failed to persist Feishu deduplication cache');
   }
-}, 2000);
+}
+
+function cleanupDedup(now: number): void {
+  for (const [id, ts] of seenIds) {
+    if (now - ts > DEDUP_TTL_MS) seenIds.delete(id);
+  }
+}
+
+function evictOldestEntry(): void {
+  if (seenIds.size < DEDUP_MAX_ENTRIES) return;
+  let oldestId: string | null = null;
+  let oldestTs = Number.POSITIVE_INFINITY;
+  for (const [id, ts] of seenIds) {
+    if (ts < oldestTs) {
+      oldestTs = ts;
+      oldestId = id;
+    }
+  }
+  if (oldestId) seenIds.delete(oldestId);
+}
+
+function withDedupLock<T>(fn: () => T): T {
+  const deadline = Date.now() + DEDUP_LOCK_TIMEOUT_MS;
+  while (true) {
+    try {
+      mkdirSync(DEDUP_LOCK_PATH);
+      break;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code !== 'EEXIST') {
+        throw new Error('Failed to acquire Feishu dedup lock', { cause: err });
+      }
+
+      try {
+        const stat = statSync(DEDUP_LOCK_PATH);
+        if (Date.now() - stat.mtimeMs > DEDUP_LOCK_STALE_MS) {
+          rmSync(DEDUP_LOCK_PATH, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        // Lock may disappear concurrently, retry.
+      }
+
+      if (Date.now() >= deadline) {
+        // Let caller decide fallback behavior if lock contention is too high.
+        throw new Error('Timed out waiting for Feishu dedup lock', { cause: err });
+      }
+      sleepMs(DEDUP_LOCK_RETRY_MS);
+    }
+  }
+
+  try {
+    return fn();
+  } finally {
+    try {
+      rmSync(DEDUP_LOCK_PATH, { recursive: true, force: true });
+    } catch {
+      // Non-critical
+    }
+  }
+}
 
 /** Returns true if the message is new (and marks it as seen). */
 function markSeen(messageId: string): boolean {
-  const now = Date.now();
+  try {
+    return withDedupLock(() => {
+      const now = Date.now();
+      loadDedupFromDisk();
 
-  // Periodic cleanup of expired entries
-  if (now - lastCleanup > DEDUP_CLEANUP_INTERVAL_MS) {
-    for (const [id, ts] of seenIds) {
-      if (now - ts > DEDUP_TTL_MS) seenIds.delete(id);
+      // Periodic cleanup of expired entries
+      if (now - lastCleanup > DEDUP_CLEANUP_INTERVAL_MS) {
+        cleanupDedup(now);
+        lastCleanup = now;
+      }
+
+      if (seenIds.has(messageId)) return false;
+      evictOldestEntry();
+      seenIds.set(messageId, now);
+      saveDedupToDisk();
+      return true;
+    });
+  } catch (err) {
+    log.warn(`Dedup lock failed, fallback to in-memory dedup: ${String(err)}`);
+    if (seenIds.has(messageId)) return false;
+    const now = Date.now();
+    if (now - lastCleanup > DEDUP_CLEANUP_INTERVAL_MS) {
+      cleanupDedup(now);
+      lastCleanup = now;
     }
-    lastCleanup = now;
+    evictOldestEntry();
+    seenIds.set(messageId, now);
+    return true;
   }
-
-  if (seenIds.has(messageId)) return false;
-
-  // Evict oldest entry when at capacity
-  if (seenIds.size >= DEDUP_MAX_ENTRIES) {
-    const oldest = seenIds.keys().next().value;
-    if (oldest) seenIds.delete(oldest);
-  }
-
-  seenIds.set(messageId, now);
-  flushDedup();
-  return true;
 }
 
 // Initialize dedup cache on module load
-loadDedup();
+loadDedupFromDisk();
 
 // ── Content extraction ────────────────────────────────────────
 
@@ -312,6 +401,7 @@ async function fetchAttachments(
 
 export type ParsedMessage = {
   messageId: string;
+  rawText: string;
   text: string;
   chatId: string;
   chatType: 'p2p' | 'group';
@@ -348,11 +438,13 @@ export async function parseMessage(
 
   const client = getHttpClient(creds);
   const rawText = extractText(event.message.content, event.message.message_type);
+  const builtinCommand = parseBuiltinSlashCommand(rawText);
 
-  if (new Set(['/clear', '/new', 'status', '/restart', '/help']).has(rawText.trim()))
+  if (builtinCommand)
     return {
       messageId: msgId,
-      text: rawText.trim(),
+      rawText,
+      text: builtinCommand.normalizedText,
       chatId,
       chatType,
       threadRootId,
@@ -406,6 +498,7 @@ export async function parseMessage(
   log.info(`Message ${msgId}: text=${text}`);
 
   return {
+    rawText,
     text,
     chatId,
     chatType,

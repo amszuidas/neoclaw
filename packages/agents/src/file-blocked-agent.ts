@@ -232,6 +232,19 @@ export function createFileBlockedAgent(baseAgent: Agent, blacklist: string[]): A
       return baseAgent.clearConversation(conversationId);
     },
 
+    listModels(conversationId: string): Promise<string[]> | string[] {
+      return baseAgent.listModels?.(conversationId) ?? [];
+    },
+
+    getModel(conversationId: string): Promise<string | null> | string | null {
+      return baseAgent.getModel?.(conversationId) ?? null;
+    },
+
+    setModel(conversationId: string, model: string): Promise<boolean> | boolean {
+      if (!baseAgent.setModel) return false;
+      return baseAgent.setModel(conversationId, model);
+    },
+
     dispose(): Promise<void> {
       return baseAgent.dispose();
     },
