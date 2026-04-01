@@ -478,6 +478,12 @@ const SESSIONS_PATH = join(homedir(), '.neoclaw', 'cache', 'sessions.json');
 const CLAUDE_MODEL_OVERRIDE_FILE = 'model.override.json';
 const CLAUDE_MODEL_ALIASES = new Set(['sonnet', 'opus', 'haiku']);
 
+function sanitizeSelectedModel(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith('/') || /\s/.test(trimmed)) return null;
+  return normalizeModelName(trimmed) ?? trimmed;
+}
+
 function normalizeModelName(value: string): string | null {
   const stripped = value.trim().replace(/\[[0-9;]*m$/gi, '');
   if (!stripped || stripped.length > 120) return null;
@@ -704,7 +710,7 @@ export class ClaudeCodeAgent implements Agent {
   }
 
   async setModel(conversationId: string, model: string): Promise<boolean> {
-    const normalized = model.trim();
+    const normalized = sanitizeSelectedModel(model);
     if (!normalized) return false;
 
     this._modelOverrides.set(conversationId, normalized);
@@ -826,7 +832,7 @@ export class ClaudeCodeAgent implements Agent {
     if (!path || !existsSync(path)) return null;
     try {
       const raw = JSON.parse(readFileSync(path, 'utf-8')) as { model?: unknown };
-      const model = typeof raw.model === 'string' ? raw.model.trim() : '';
+      const model = typeof raw.model === 'string' ? sanitizeSelectedModel(raw.model) : null;
       if (!model) return null;
       this._modelOverrides.set(conversationId, model);
       return model;

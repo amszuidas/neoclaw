@@ -37,7 +37,7 @@ const DEDUP_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 const DEDUP_PATH = join(homedir(), '.neoclaw', 'cache', 'feishu-dedup.json');
 const DEDUP_LOCK_PATH = join(homedir(), '.neoclaw', 'cache', 'feishu-dedup.lock');
 const DEDUP_LOCK_STALE_MS = 10_000;
-const DEDUP_LOCK_TIMEOUT_MS = 500;
+const DEDUP_LOCK_TIMEOUT_MS = 2_000;
 const DEDUP_LOCK_RETRY_MS = 10;
 const DEDUP_SLEEP_BUF = new SharedArrayBuffer(4);
 const DEDUP_SLEEP_VIEW = new Int32Array(DEDUP_SLEEP_BUF);
@@ -156,16 +156,10 @@ function markSeen(messageId: string): boolean {
       return true;
     });
   } catch (err) {
-    log.warn(`Dedup lock failed, fallback to in-memory dedup: ${String(err)}`);
-    if (seenIds.has(messageId)) return false;
-    const now = Date.now();
-    if (now - lastCleanup > DEDUP_CLEANUP_INTERVAL_MS) {
-      cleanupDedup(now);
-      lastCleanup = now;
-    }
-    evictOldestEntry();
-    seenIds.set(messageId, now);
-    return true;
+    // Fail closed here: duplicate delivery is worse than dropping a message
+    // under abnormal lock contention because it can corrupt session state.
+    log.warn(`Dedup lock failed, dropping message ${messageId}: ${String(err)}`);
+    return false;
   }
 }
 

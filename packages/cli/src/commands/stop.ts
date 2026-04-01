@@ -5,6 +5,8 @@ import { defineCommand } from 'citty';
 import { log } from '@clack/prompts';
 import { NEOCLAW_HOME } from '@neoclaw/core/config';
 
+const CLI_START_PATTERN = `${join(import.meta.dir, '..', 'index.ts')} start`;
+
 export default defineCommand({
   meta: {
     name: 'stop',
@@ -63,8 +65,7 @@ export default defineCommand({
     }
 
     // Regression safeguard: clean up any leftover daemon start processes.
-    const pattern = 'packages/cli/src/index.ts start';
-    const pgrep = spawnSync('pgrep', ['-f', pattern], { encoding: 'utf-8' });
+    const pgrep = spawnSync('pgrep', ['-f', CLI_START_PATTERN], { encoding: 'utf-8' });
     const leftovers =
       pgrep.status === 0
         ? pgrep.stdout

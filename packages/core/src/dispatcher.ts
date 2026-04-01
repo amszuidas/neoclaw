@@ -206,8 +206,18 @@ export class Dispatcher {
   private _normalizePendingModelSelection(text: string, conversationKey: string): string {
     const trimmed = text.trim();
     const builtin = parseBuiltinSlashCommand(trimmed);
-    if (builtin?.command === 'model') return builtin.normalizedText;
+    if (builtin) {
+      if (builtin.command !== 'model') this._pendingModelSelection.delete(conversationKey);
+      return builtin.normalizedText;
+    }
     if (!this._pendingModelSelection.has(conversationKey)) return text;
+
+    // If the user entered another slash command, cancel model selection and
+    // pass it through untouched instead of treating it as a model name.
+    if (trimmed.startsWith('/')) {
+      this._pendingModelSelection.delete(conversationKey);
+      return text;
+    }
 
     if (/^\d+$/.test(trimmed) || /^[a-z0-9._:/-]+$/i.test(trimmed)) {
       this._pendingModelSelection.delete(conversationKey);
